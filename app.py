@@ -643,378 +643,457 @@ def soft_sail_curve(boom_len, delta_s, mast, flapping, aw_b):
 
 
 # ----------------------------------------------------------------------------
-# Çizim
+# Kokpit görselleştirme (yalnız çizim — fizik motoruna dokunmaz)
 # ----------------------------------------------------------------------------
-def build_figure(heading, eq, path, stalled, sail_type, delta_r, p, lim=None):
-    fig = go.Figure()
-    extent = float(np.ptp(path[:, :2], axis=0).max()) if len(path) > 1 else 0.0
-    sc = max(1.0, extent / 8.0)        # tekne ikonu büyütme
-    O = (0.0, 0.0)
+BG = "#0F172A"          # sayfa
+PANEL = "#1E293B"       # kartlar
+WATER = "#0B1A2E"       # su
+GRIDC = "#16304D"
+TXT = "#E2E8F0"
+MUTED = "#94A3B8"
+GLOW = "#22D3EE"        # rota kılavuzu (turkuaz)
 
-    # Ölü açı sektörü — KUVVET DENGESİNDEN (fiziksel sınır); Eq.(12) ±ζ yalnız kesikli referans
-    R0 = 1.6 * sc
-    sec = np.zeros((1, 2))
+
+def _arrow(fig, tail, tip, color, text, width=7, size=14, anchor_shift=(0, 0)):
+    fig.add_annotation(x=tip[0], y=tip[1], ax=tail[0], ay=tail[1], xref="x", yref="y", axref="x", ayref="y",
+                       showarrow=True, arrowhead=2, arrowsize=1.0, arrowwidth=width, arrowcolor=color,
+                       text="", standoff=0)
+    fig.add_annotation(x=tip[0], y=tip[1], xref="x", yref="y", showarrow=False, text=f"<b>{text}</b>",
+                       font=dict(color=color, size=size), bgcolor="rgba(15,23,42,0.85)", borderpad=3,
+                       xshift=anchor_shift[0], yshift=anchor_shift[1])
+
+
+def build_cockpit_figure(heading, eq, path, sail_type, delta_r, p, lim, tws_kt, horizon):
+    """Tekne merkezli, sabit kameralı kahraman görünüm (kuzey yukarı)."""
+    fig = go.Figure()
+    O = (0.0, 0.0)
+    R = max(2.6, 1.5 * p.L)                       # sabit kamera yarıçapı (m)
+
+    # Pusula halkası + ölü açı sektörü (kuvvet dengesi) + Eq.(12) referansı
+    ring = np.array([R * 0.93 * compass_unit(a) for a in np.linspace(0, 360, 121)])
+    fig.add_trace(go.Scatter(x=ring[:, 0], y=ring[:, 1], mode="lines", line=dict(color="#1F3B5C", width=1),
+                             hoverinfo="skip", showlegend=False))
+    for a, lbl in ((0, "K"), (90, "D"), (180, "G"), (270, "B")):
+        q = R * 0.985 * compass_unit(a)
+        fig.add_annotation(x=q[0], y=q[1], text=f"<b>{lbl}</b>", showarrow=False,
+                           font=dict(color="#475569", size=13))
+    for a in range(0, 360, 30):
+        q1, q2 = R * 0.90 * compass_unit(a), R * 0.93 * compass_unit(a)
+        fig.add_trace(go.Scatter(x=[q1[0], q2[0]], y=[q1[1], q2[1]], mode="lines",
+                                 line=dict(color="#1F3B5C", width=1), hoverinfo="skip", showlegend=False))
     if lim is not None and lim > 0:
         angs = np.linspace(WIND_FROM_DEG - lim, WIND_FROM_DEG + lim, 40)
-        sec = np.vstack([[0, 0], np.array([R0 * compass_unit(a_) for a_ in angs]), [0, 0]])
-        fig.add_trace(go.Scatter(x=sec[:, 0], y=sec[:, 1], fill="toself", mode="lines",
-                                 line=dict(width=0), fillcolor="rgba(192,57,43,0.13)",
-                                 name=f"Ölü açı ±{lim:.1f}° (kuvvet dengesi)", hoverinfo="name"))
-    xs, ys = [], []
+        sec = np.vstack([[0, 0], np.array([R * 0.93 * compass_unit(a_) for a_ in angs]), [0, 0]])
+        fig.add_trace(go.Scatter(x=sec[:, 0], y=sec[:, 1], fill="toself", mode="lines", line=dict(width=0),
+                                 fillcolor="rgba(239,68,68,0.10)", hoverinfo="text",
+                                 text=f"Ölü açı ±{lim:.1f}° (kuvvet dengesinden)", showlegend=False))
+        for sgn in (-1, 1):
+            e = R * 0.93 * compass_unit(WIND_FROM_DEG + sgn * lim)
+            fig.add_trace(go.Scatter(x=[0, e[0]], y=[0, e[1]], mode="lines", hoverinfo="skip", showlegend=False,
+                                     line=dict(color="rgba(239,68,68,0.55)", width=1.5)))
     for sgn in (-1, 1):
-        e = 1.15 * R0 * compass_unit(WIND_FROM_DEG + sgn * p.zeta_deg)
-        xs += [0, e[0], None]
-        ys += [0, e[1], None]
-    fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines", line=dict(color="#C0392B", width=1, dash="dash"),
-                             name=f"Jaulin Eq.(12) referansı ±{p.zeta_deg:.0f}°", hoverinfo="name"))
+        e = R * 0.93 * compass_unit(WIND_FROM_DEG + sgn * p.zeta_deg)
+        fig.add_trace(go.Scatter(x=[0, e[0]], y=[0, e[1]], mode="lines", hoverinfo="skip", showlegend=False,
+                                 line=dict(color="rgba(239,68,68,0.35)", width=1, dash="dot")))
 
-    # Rota
+    # Rota kılavuzu: tam rota, tekne ölçeğini bozmadan kadraja sığacak şekilde düzgün ölçeklenir
+    k = 1.0
     if len(path) > 1:
+        ext = float(np.max(np.hypot(path[:, 0], path[:, 1])))
+        astern = float(np.mean(path[:, 5])) < 0           # çoğunlukla geri gidiyorsa kıçtan başlat
+        bow = to_world([[-p.L / 2 - 0.25 if astern else p.L / 2, 0.0]], heading, 1.0, O)[0]
+        k = min(1.0, (0.86 * R - p.L / 2) / max(ext, 1e-6))   # pruva + rota kadraja sığar
+        pp = (path[:, :2] - path[0, :2]) * k + bow          # kılavuz pruvadan çıkar
+        fig.add_trace(go.Scatter(x=pp[:, 0], y=pp[:, 1], mode="lines", hoverinfo="skip", showlegend=False,
+                                 line=dict(color="rgba(34,211,238,0.16)", width=10)))
         fig.add_trace(go.Scatter(
-            x=path[:, 0], y=path[:, 1], mode="lines", name="Tahmini rota",
-            line=dict(color=COL_PATH, width=3, dash="dash"),
+            x=pp[:, 0], y=pp[:, 1], mode="lines", showlegend=False,
+            line=dict(color=GLOW, width=2, dash="dash"),
             customdata=np.c_[path[:, 2], path[:, 3] / KT2MS, path[:, 4], path[:, 5]],
-            hovertemplate="t=%{customdata[0]:.1f} s<br>V=%{customdata[1]:.2f} kt"
-                          "<br>pruva=%{customdata[2]:.0f}°<br>u (ileri)=%{customdata[3]:+.2f} m/s"
-                          "<extra></extra>"))
-        back = path[:, 5] < -0.02                      # geri giderken (sternway) bölümler
+            hovertemplate="t=%{customdata[0]:.1f} s · V=%{customdata[1]:.2f} kt<br>pruva %{customdata[2]:.0f}°"
+                          " · u=%{customdata[3]:+.2f} m/s<extra>rota</extra>"))
+        back = path[:, 5] < -0.02
         if back.any():
-            fig.add_trace(go.Scatter(x=np.where(back, path[:, 0], None), y=np.where(back, path[:, 1], None),
-                                     mode="lines", name="Geriye sürüklenme (sternway)",
-                                     line=dict(color="#C0392B", width=4), hoverinfo="skip"))
-        # Rota üzerinde her ~2 s'de pruva işaretleri: rota ile pruva arasındaki fark = drift (yengeç yürüyüşü)
-        tick = max(0.6, 0.06 * max(1.0, float(np.ptp(path[:, :2], axis=0).max())))
-        xs, ys = [], []
-        for k in range(8, len(path), 8):
-            d_ = compass_unit(path[k, 4]) * tick
-            xs += [path[k, 0] - d_[0], path[k, 0] + d_[0], None]
-            ys += [path[k, 1] - d_[1], path[k, 1] + d_[1], None]
-        if xs:
-            fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines", name="Rotadaki pruva (2 s'de bir)",
-                                     line=dict(color="#34495E", width=2), hoverinfo="skip"))
-    if stalled:
-        fig.add_trace(go.Scatter(x=[path[-1, 0]], y=[path[-1, 1]], mode="markers+text",
-                                 marker=dict(symbol="x", size=12, color="#C0392B"),
-                                 text=["Yol kesildi"], textposition="top center",
-                                 name="Rota sonu: ileri hareket dengesi yok"))
+            fig.add_trace(go.Scatter(x=np.where(back, pp[:, 0], None), y=np.where(back, pp[:, 1], None),
+                                     mode="lines", line=dict(color="#EF4444", width=4), hoverinfo="skip",
+                                     showlegend=False))
+        fig.add_trace(go.Scatter(x=[pp[-1, 0]], y=[pp[-1, 1]], mode="markers+text", showlegend=False,
+                                 marker=dict(size=9, color=GLOW, line=dict(color=BG, width=2)),
+                                 text=[f"{horizon:.0f} s"], textposition="top center",
+                                 textfont=dict(color=GLOW, size=12), hoverinfo="skip"))
 
-    # Kirişler + merkez kıç desteği
+    # Tekne (gerçek boyut)
     hs = p.hull_sep / 2
     for xb in (0.30, -0.45):
-        w = to_world([[xb, -hs], [xb, hs]], heading, sc, O)
-        fig.add_trace(go.Scatter(x=w[:, 0], y=w[:, 1], mode="lines", showlegend=False,
-                                 line=dict(color="#7F8C8D", width=6), hoverinfo="skip"))
-    xr = p.x_rud
-    w = to_world([[-0.45, 0], [xr, 0]], heading, sc, O)
-    fig.add_trace(go.Scatter(x=w[:, 0], y=w[:, 1], mode="lines", showlegend=False,
-                             line=dict(color="#7F8C8D", width=4), hoverinfo="skip"))
-
-    # Gövdeler: iskele (sol) TURUNCU, sancak (sağ) SİYAH
-    for side, col, nm in ((-1, COL_PORT, "İskele gövde (sol)"), (1, COL_STBD, "Sancak gövde (sağ)")):
-        w = to_world(hull_polygon(p, side), heading, sc, O)
-        fig.add_trace(go.Scatter(x=w[:, 0], y=w[:, 1], fill="toself", mode="lines", name=nm,
-                                 fillcolor=col, line=dict(color=col, width=1), hoverinfo="name"))
-
-    # TEK merkezi dümen (kıç, simetri ekseninde). +δr → firar kenarı sancağa → tekne sancağa döner
+        w = to_world([[xb, -hs], [xb, hs]], heading, 1.0, O)
+        fig.add_trace(go.Scatter(x=w[:, 0], y=w[:, 1], mode="lines", line=dict(color="#94A3B8", width=7),
+                                 hoverinfo="skip", showlegend=False))
+    w = to_world([[-0.45, 0], [p.x_rud, 0]], heading, 1.0, O)
+    fig.add_trace(go.Scatter(x=w[:, 0], y=w[:, 1], mode="lines", line=dict(color="#94A3B8", width=4),
+                             hoverinfo="skip", showlegend=False))
+    for side, col, edge, nm in ((-1, COL_PORT, "#FDBA74", "İskele gövde (turuncu)"),
+                                (1, COL_STBD, "#CBD5E1", "Sancak gövde (siyah)")):
+        w = to_world(hull_polygon(p, side), heading, 1.0, O)
+        fig.add_trace(go.Scatter(x=w[:, 0], y=w[:, 1], fill="toself", mode="lines", fillcolor=col,
+                                 line=dict(color=edge, width=1.6), hoverinfo="text", text=nm, showlegend=False))
     dr = math.radians(delta_r)
-    blade = [[xr, 0.0], [xr - 0.22 * math.cos(dr), 0.22 * math.sin(dr)]]
-    w = to_world(blade, heading, sc, O)
-    fig.add_trace(go.Scatter(x=w[:, 0], y=w[:, 1], mode="lines+markers", name=f"Merkezi dümen ({delta_r:+.0f}°)",
-                             line=dict(color=COL_RUDDER, width=7), marker=dict(size=[8, 0], color=COL_RUDDER)))
-
-    # Direk + yelken
+    blade = to_world([[p.x_rud, 0.0], [p.x_rud - 0.24 * math.cos(dr), 0.24 * math.sin(dr)]], heading, 1.0, O)
+    fig.add_trace(go.Scatter(x=blade[:, 0], y=blade[:, 1], mode="lines+markers", showlegend=False,
+                             line=dict(color="#60A5FA", width=8), marker=dict(size=[9, 0], color="#60A5FA"),
+                             hoverinfo="text", text=f"Merkezi dümen {delta_r:+.0f}°"))
     mast = np.array([p.x_mast, 0.0])
     if sail_type == "wing":
-        poly = naca_polygon(p.chord_wing, eq["delta_s"], mast)
-        w = to_world(poly, heading, sc, O)
-        fig.add_trace(go.Scatter(x=w[:, 0], y=w[:, 1], fill="toself", mode="lines",
-                                 name=f"Sert kanat NACA 0012 (δs={eq['delta_s']:+.0f}°)",
-                                 fillcolor="rgba(236,240,241,0.95)", line=dict(color="#34495E", width=2)))
+        w = to_world(naca_polygon(p.chord_wing, eq["delta_s"], mast), heading, 1.0, O)
+        fig.add_trace(go.Scatter(x=w[:, 0], y=w[:, 1], fill="toself", mode="lines", showlegend=False,
+                                 fillcolor="rgba(226,232,240,0.92)", line=dict(color="#F8FAFC", width=1.5),
+                                 hoverinfo="text", text=f"Sert kanat NACA 0012 · δs={eq['delta_s']:+.0f}°"))
     else:
         a = math.radians(180.0 - eq["delta_s"])
         boom = np.vstack([mast, mast + p.boom_len * np.array([math.cos(a), math.sin(a)])])
-        w = to_world(boom, heading, sc, O)
-        fig.add_trace(go.Scatter(x=w[:, 0], y=w[:, 1], mode="lines", name="Bumba",
-                                 line=dict(color="#5D4037", width=4)))
-        cur = soft_sail_curve(p.boom_len, eq["delta_s"], mast, eq["flapping"], eq["aw_b"])
-        w = to_world(cur, heading, sc, O)
-        lbl = ("Bez yelken — ÇIRPIYOR (luff, akışa hizalı)" if eq["flapping"] else
-               f"Bez yelken — TERS DOLMUŞ (backing, δs={eq['delta_s']:+.0f}°)" if eq["backwinded"] else
-               f"Bez yelken (δs={eq['delta_s']:+.0f}°)")
-        fig.add_trace(go.Scatter(x=w[:, 0], y=w[:, 1], mode="lines", name=lbl,
-                                 line=dict(color="#C0392B" if eq["flapping"] else "#8E44AD" if eq["backwinded"] else "#2C3E50",
-                          width=3)))
-    wm = to_world(mast, heading, sc, O)
-    fig.add_trace(go.Scatter(x=wm[:, 0], y=wm[:, 1], mode="markers", name="Ana direk",
-                             marker=dict(size=11, color="#2C3E50", line=dict(color="white", width=2))))
+        w = to_world(boom, heading, 1.0, O)
+        fig.add_trace(go.Scatter(x=w[:, 0], y=w[:, 1], mode="lines", line=dict(color="#A16207", width=5),
+                                 hoverinfo="skip", showlegend=False))
+        cur = to_world(soft_sail_curve(p.boom_len, eq["delta_s"], mast, eq["flapping"], eq["aw_b"]), heading, 1.0, O)
+        col = "#F87171" if eq["flapping"] else "#C084FC" if eq["backwinded"] else "#F8FAFC"
+        state = "ÇIRPIYOR" if eq["flapping"] else "TERS DOLMUŞ" if eq["backwinded"] else "dolu"
+        fig.add_trace(go.Scatter(x=cur[:, 0], y=cur[:, 1], mode="lines", line=dict(color=col, width=4),
+                                 hoverinfo="text", text=f"Bez yelken ({state}) · δs={eq['delta_s']:+.0f}°",
+                                 showlegend=False))
+    wm = to_world(mast, heading, 1.0, O)
+    fig.add_trace(go.Scatter(x=wm[:, 0], y=wm[:, 1], mode="markers", hoverinfo="text", text="Ana direk",
+                             marker=dict(size=11, color="#0F172A", line=dict(color="#F8FAFC", width=2.5)),
+                             showlegend=False))
 
-    # Pruva çizgisi ve gerçek hareket yönü (COG): aradaki açı = drift
-    Lh = 1.9 * sc
-    hd = to_world([[0, 0], [Lh / sc, 0]], heading, sc, O)
-    fig.add_trace(go.Scatter(x=hd[:, 0], y=hd[:, 1], mode="lines", name=f"Pruva θ = {heading:.0f}°",
-                             line=dict(color="#7F8C8D", width=2, dash="dot"), hoverinfo="name"))
-    annotations = []
-    if eq["V"] > 0:
-        cg = compass_unit(eq["course"]) * Lh
-        annotations.append(dict(x=cg[0], y=cg[1], ax=0, ay=0, xref="x", yref="y", axref="x", ayref="y",
-                                showarrow=True, arrowhead=2, arrowwidth=2.5, arrowcolor=COL_PATH, text=""))
-        fig.add_trace(go.Scatter(x=[None], y=[None], mode="lines", line=dict(color=COL_PATH, width=3),
-                                 name=f"Hareket yönü φ (COG) = {eq['course'] % 360:.1f}°"))
+    # Kuvvet okları: gövdenin DIŞINDAN başlar (pruva/kıç ve borda), kalın, 14 px etiket
+    Fx, Fy = eq["Fx"], eq["Fy"]
+    Fref = max(abs(Fx), abs(Fy), 1e-6)
+    Lmax = 0.38 * R
 
-    # Kuvvet diyagramı: her kuvvet GERÇEK uygulama noktasından çizilir (moment kolu görünür)
-    ce = eq["ce"]
-    forces = [(eq["Fx"], [1, 0], ce, COL_FX, "Fx yelken itişi"),
-              (eq["Fy"], [0, 1], ce, COL_FY, "Fy yelken yanal"),
-              (eq["Y_r"], [0, 1], [p.x_rud - 0.1, 0.0], COL_YR, "Y dümen"),
-              (eq["Y_h"], [0, 1], [p.x_CLR, 0.0], COL_YH, "Y gövde")]
-    Fref = max([abs(f_[0]) for f_ in forces] + [1e-6])
-    Lmax = 1.3 * sc
-    for comp, ub, pt, col, nm in forces:
-        if abs(comp) < 0.02 * Fref or abs(comp) < 1e-3:
-            continue
-        tail = to_world([pt], heading, sc, O)[0]
-        vec = to_world([[ub[0] * comp / Fref * Lmax, ub[1] * comp / Fref * Lmax]], heading, 1.0, O)[0]
-        tip = tail + vec
-        annotations.append(dict(x=tip[0], y=tip[1], ax=tail[0], ay=tail[1], xref="x", yref="y",
-                                axref="x", ayref="y", showarrow=True, arrowhead=3, arrowsize=1.1,
-                                arrowwidth=3.5, arrowcolor=col, text=f"<b>{comp:+.1f} N</b>",
-                                font=dict(color=col, size=11)))
-        fig.add_trace(go.Scatter(x=[None], y=[None], mode="lines", line=dict(color=col, width=4), name=nm))
-    cw = to_world([ce], heading, sc, O)
-    fig.add_trace(go.Scatter(x=cw[:, 0], y=cw[:, 1], mode="markers", name="Yelken basınç merkezi (CE)",
-                             marker=dict(size=9, color=COL_FY, symbol="diamond",
-                                         line=dict(color="white", width=1))))
+    def seg(F):
+        return 0.0 if abs(F) < 1e-3 else max(0.22 * R * 0.5, Lmax * abs(F) / Fref)
 
-    # Eksen aralığı
-    allp = [path[:, :2], sec, to_world(hull_polygon(p, -1), heading, sc, O),
-            to_world(hull_polygon(p, 1), heading, sc, O)]
-    for a in annotations:
-        allp.append(np.array([[a["x"], a["y"]]]))
-    allp = np.vstack(allp)
-    lo, hi = allp.min(axis=0), allp.max(axis=0)
-    ctr, half = (lo + hi) / 2, max(hi - lo) / 2 * 1.25 + 0.5
-    xr_, yr_ = [ctr[0] - half, ctr[0] + half], [ctr[1] - half, ctr[1] + half]
+    if abs(Fx) >= 1e-3:
+        x0 = (p.L / 2 + 0.08) if Fx > 0 else -(p.L / 2 + 0.30)
+        t = to_world([[x0, 0.0]], heading, 1.0, O)[0]
+        e = to_world([[x0 + math.copysign(seg(Fx), Fx), 0.0]], heading, 1.0, O)[0]
+        _arrow(fig, t, e, "#22C55E", f"Fx {Fx:+.1f} N", anchor_shift=(0, 14))
+    if abs(Fy) >= 1e-3:
+        y0 = math.copysign(hs + 0.20, Fy)
+        t = to_world([[0.0, y0]], heading, 1.0, O)[0]
+        e = to_world([[0.0, y0 + math.copysign(seg(Fy), Fy)]], heading, 1.0, O)[0]
+        _arrow(fig, t, e, "#EF4444", f"Fy {Fy:+.1f} N", anchor_shift=(0, -14))
 
-    # Gerçek rüzgar oku (kuzeyden)
-    wx, wy0 = xr_[0] + 0.12 * half, yr_[1] - 0.06 * half
-    annotations.append(dict(x=wx, y=wy0 - 0.35 * half, ax=wx, ay=wy0, xref="x", yref="y",
-                            axref="x", ayref="y", showarrow=True, arrowhead=2, arrowwidth=3,
-                            arrowcolor=COL_WIND, text="", ))
-    annotations.append(dict(x=wx, y=wy0, xref="x", yref="y", showarrow=False, yshift=12,
-                            text="<b>Rüzgar 0° (K)</b>", font=dict(color=COL_WIND, size=12)))
+    # Rüzgar oku (kuzeyden) — kadrajın üst kenarı
+    wx = -0.80 * R
+    _arrow(fig, (wx, 0.98 * R), (wx, 0.62 * R), "#60A5FA", f"Rüzgar {tws_kt:.0f} kt", width=5, size=13,
+           anchor_shift=(0, -12))
 
+    if k < 0.999:
+        fig.add_annotation(x=0.99, y=0.01, xref="paper", yref="paper", xanchor="right", yanchor="bottom",
+                           showarrow=False, text=f"rota kılavuzu ölçeği ×{k:.2f} · tekne gerçek boyut",
+                           font=dict(color=MUTED, size=11))
     fig.update_layout(
-        height=640, margin=dict(l=10, r=10, t=40, b=10),
-        plot_bgcolor="#E8F4FA", annotations=annotations,
-        title=dict(text=f"Kuşbakışı — pruva {heading:.0f}° | tekne ikonu ×{sc:.1f} büyütülmüş", x=0.01,
-                   font=dict(size=14)),
-        legend=dict(orientation="h", yanchor="top", y=-0.06, x=0, font=dict(size=11)),
-        xaxis=dict(range=xr_, title="Doğu (m)", zeroline=False, gridcolor="white"),
-        yaxis=dict(range=yr_, title="Kuzey (m)", zeroline=False, gridcolor="white",
+        autosize=True, margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor=BG, plot_bgcolor=WATER,
+        showlegend=False, dragmode="pan", hoverlabel=dict(bgcolor=PANEL, font_color=TXT),
+        xaxis=dict(range=[-R, R], showgrid=True, gridcolor=GRIDC, zeroline=False, showticklabels=False,
+                   fixedrange=False),
+        yaxis=dict(range=[-R, R], showgrid=True, gridcolor=GRIDC, zeroline=False, showticklabels=False,
                    scaleanchor="x", scaleratio=1),
     )
     return fig
 
 
+def build_minimap(path, heading, p, lim):
+    """Gerçek ölçekli rota haritası (m)."""
+    fig = go.Figure()
+    if len(path) > 1:
+        fig.add_trace(go.Scatter(x=path[:, 0], y=path[:, 1], mode="lines", line=dict(color=GLOW, width=2.5),
+                                 hoverinfo="skip"))
+        back = path[:, 5] < -0.02
+        if back.any():
+            fig.add_trace(go.Scatter(x=np.where(back, path[:, 0], None), y=np.where(back, path[:, 1], None),
+                                     mode="lines", line=dict(color="#EF4444", width=3), hoverinfo="skip"))
+    for row, col in ((path[0], "#F97316"), (path[-1], GLOW)):
+        tri = to_world([[0.9, 0], [-0.9, -0.5], [-0.9, 0.5], [0.9, 0]], row[4], 1.0, (row[0], row[1]))
+        fig.add_trace(go.Scatter(x=tri[:, 0], y=tri[:, 1], fill="toself", mode="lines", fillcolor=col,
+                                 line=dict(color=col, width=1), hoverinfo="skip"))
+    pts = path[:, :2]
+    lo, hi = pts.min(axis=0) - 3, pts.max(axis=0) + 3
+    c, h = (lo + hi) / 2, max(hi - lo) / 2
+    fig.update_layout(height=210, margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor=PANEL, plot_bgcolor=WATER,
+                      showlegend=False,
+                      xaxis=dict(range=[c[0] - h, c[0] + h], gridcolor=GRIDC, zeroline=False,
+                                 tickfont=dict(color=MUTED, size=9), ticksuffix=" m"),
+                      yaxis=dict(range=[c[1] - h, c[1] + h], gridcolor=GRIDC, zeroline=False,
+                                 tickfont=dict(color=MUTED, size=9), scaleanchor="x", scaleratio=1))
+    return fig
+
+
 # ----------------------------------------------------------------------------
-# Arayüz
+# Kokpit arayüzü
 # ----------------------------------------------------------------------------
+CSS = f"""
+<style>
+html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {{ background:{BG}; color:{TXT}; }}
+header[data-testid="stHeader"], footer, #MainMenu, [data-testid="stToolbar"],
+[data-testid="stDecoration"], [data-testid="stStatusWidget"] {{ display:none !important; }}
+.block-container {{ padding:0.55rem 1rem 0 1rem !important; max-width:100% !important; }}
+[data-testid="stSidebar"] {{ background:#0B1222; border-right:1px solid #1E293B; }}
+[data-testid="stSidebar"] .block-container, [data-testid="stSidebarContent"] {{ padding-top:0.6rem; }}
+[data-testid="stSidebarUserContent"] {{ padding-top:0.4rem; }}
+[data-testid="stVerticalBlock"] {{ gap:0.45rem; }}
+.ck-row {{ display:flex; gap:10px; align-items:stretch; }}
+.ck-card {{ flex:1; background:{PANEL}; border:1px solid #334155; border-radius:12px; padding:8px 14px;
+           min-width:0; cursor:help; }}
+.ck-lbl {{ font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:{MUTED}; white-space:nowrap;
+          overflow:hidden; text-overflow:ellipsis; }}
+.ck-val {{ font-size:27px; font-weight:800; line-height:1.15; white-space:nowrap; font-variant-numeric:tabular-nums; }}
+.ck-unit {{ font-size:14px; font-weight:600; color:{MUTED}; margin-left:3px; }}
+.ck-badge {{ display:flex; flex-direction:column; justify-content:center; align-items:center; min-width:150px;
+            border-radius:12px; padding:6px 14px; font-weight:800; letter-spacing:.08em; color:#0F172A;
+            cursor:help; text-align:center; }}
+.ck-badge small {{ font-weight:600; letter-spacing:0; font-size:11.5px; opacity:.85; }}
+.ck-panel {{ background:{PANEL}; border:1px solid #334155; border-radius:12px; padding:8px 12px; }}
+.ck-pr {{ display:flex; justify-content:space-between; align-items:baseline; padding:3px 0;
+         border-bottom:1px solid #263449; font-size:13px; cursor:help; }}
+.ck-pr:last-child {{ border-bottom:none; }}
+.ck-pr span:first-child {{ color:{MUTED}; }}
+.ck-pr b {{ font-size:15px; font-variant-numeric:tabular-nums; }}
+.ck-h {{ font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:{MUTED}; margin:2px 0 4px; }}
+.ck-chips {{ display:flex; flex-wrap:wrap; gap:6px; }}
+.ck-chip {{ font-size:12px; padding:3px 9px; border-radius:999px; border:1px solid; cursor:help; white-space:nowrap; }}
+div[data-testid="stPlotlyChart"] {{ background:{BG}; border-radius:12px; overflow:hidden; }}
+.st-key-hero {{ flex:0 0 calc(100vh - 104px) !important; height:calc(100vh - 104px) !important;
+               min-height:420px; }}
+.st-key-hero [data-testid="stElementContainer"] {{ height:100% !important; }}
+.ck-row {{ margin-bottom:18px; }}
+[data-testid="stSidebar"] button[kind] {{ height:46px; font-weight:700; }}
+</style>
+"""
+
+
+def _esc(s):
+    return (str(s).replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def _card(label, value, unit, color, tip):
+    return (f'<div class="ck-card" title="{_esc(tip)}"><div class="ck-lbl">{label} ⓘ</div>'
+            f'<div class="ck-val" style="color:{color}">{value}<span class="ck-unit">{unit}</span></div></div>')
+
+
+def _row(label, value, tip, color=TXT):
+    return f'<div class="ck-pr" title="{_esc(tip)}"><span>{label}</span><b style="color:{color}">{value}</b></div>'
+
+
+def _chip(text, color, tip):
+    return (f'<span class="ck-chip" style="color:{color};border-color:{color};background:{color}1A" '
+            f'title="{_esc(tip)}">{text}</span>')
+
+
+def _set_sail(v):
+    st.session_state["sail"] = v
+
+
 def main():
-    st.set_page_config(page_title="Katamaran — Modül 1", layout="wide")
-    st.markdown("""
-        <style>
-        [data-testid="stMetric"] {background:#F7F9FB; border:1px solid #E1E5EA;
-            border-radius:10px; padding:10px 14px; overflow:hidden;}
-        [data-testid="stMetricValue"] {font-size:1.55rem; white-space:nowrap;}
-        [data-testid="stMetricLabel"] p {white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-        </style>""", unsafe_allow_html=True)
+    st.set_page_config(page_title="Katamaran Kokpiti — Modül 1", layout="wide", initial_sidebar_state="expanded")
+    st.markdown(CSS, unsafe_allow_html=True)
+    if "sail" not in st.session_state:
+        st.session_state["sail"] = "wing"
 
+    # ---------------- Sol menü ----------------
     with st.sidebar:
-        st.header("Girdiler")
-        sail_lbl = st.radio("Yelken tipi", ["Sert Kanat (NACA Wingsail)", "Bez Yelken (Soft Sail)"])
-        sail_type = "wing" if sail_lbl.startswith("Sert") else "soft"
-        heading = st.slider("Pruva açısı θ (°)", 0, 360, 90, 1)
-        trim_mode = st.radio("Yelken trim modu", ["Optimum — kuvvet dengesi (maks. itiş)",
-                                                  "Otomatik — Jaulin Eq.(11) kardioid", "Manuel"])
-        trim_auto = "opt" if trim_mode.startswith("Optimum") else trim_mode.startswith("Otomatik")
-        boom_lbl = st.radio("Bez yelken bumba tahriki", ["Iskota (ip — yalnız çeker)", "Rijit servo (iki yönlü)"],
-                            disabled=sail_type != "soft",
-                            help="Iskota: bumba rüzgar altına serbest savrulur, trim yalnız en dış açıyı sınırlar "
-                                 "(Jaulin 2013). Rijit: bumba tam komut açısında tutulur; rüzgar arkadan "
-                                 "vurursa yelken TERS DOLAR (backing) ve gerçek kuvvet üretir.")
-        trim_manual = st.slider("Yelken açısı / trim δs (°)  (+ = bumba sancakta; ıskotada yalnız |δs| sınırdır)",
-                                -90, 90, 45, 1, disabled=trim_mode != "Manuel")
-        delta_r = st.slider("Merkezi dümen δr (°)  (+ = sancağa dönüş)", -35, 35, 0, 1)
-        tws_kt = st.slider("Rüzgar hızı (knot) — yön 0° Kuzey", 2, 30, 10, 1)
-        horizon = st.slider("Rota tahmin süresi (s)", 5, 60, 20, 1)
+        st.markdown('<div class="ck-h">Yelken</div>', unsafe_allow_html=True)
+        b1, b2 = st.columns(2)
+        b1.button("Sert Kanat", use_container_width=True, on_click=_set_sail, args=("wing",),
+                  type="primary" if st.session_state["sail"] == "wing" else "secondary")
+        b2.button("Bez Yelken", use_container_width=True, on_click=_set_sail, args=("soft",),
+                  type="primary" if st.session_state["sail"] == "soft" else "secondary")
+        sail_type = st.session_state["sail"]
+        heading = st.slider("Pruva θ (°)", 0, 360, 90, 1, help="0° = Kuzey, saat yönünde")
+        delta_r = st.slider("Merkezi dümen δr (°)", -35, 35, 0, 1, help="+ sancağa, − iskeleye dönüş")
+        tws_kt = st.slider("Rüzgar hızı (kt)", 2, 30, 10, 1, help="Rüzgar yönü sabit: 0° (Kuzeyden)")
+        trim_on = st.toggle("Otomatik yelken trimi", value=True,
+                            help="Açık: her an itişi en büyük yapan açı (kuvvet hesabından). "
+                                 "Kapalı: yelken açısını elle ver.")
+        trim_manual = 45
+        if not trim_on:
+            trim_manual = st.slider("Yelken açısı δs (°)", -90, 90, 45, 1,
+                                    help="+ bumba sancakta. Iskotalı bez yelkende yalnız |δs| sınırdır.")
 
-        with st.expander("Model parametreleri — VARSAYIM (makalelerde verilmiyor)"):
+        with st.expander("Model parametreleri (VARSAYIM)", expanded=False):
+            auto_method = st.radio("Otomatik trim yöntemi", ["Optimum (maks. itiş)", "Jaulin Eq.(11) kardioid"],
+                                   help="Optimum: kuvvet hesabından. Jaulin 2013 Eq.(11): kardioid kural.")
+            boom_lbl = st.radio("Bez yelken bumba tahriki", ["Iskota (ip)", "Rijit servo"],
+                                help="Iskota yalnız çeker: bumba rüzgar altına savrulur (Jaulin 2013). "
+                                     "Rijit: komut açısında tutulur; ters rüzgarda yelken ters dolar.")
+            horizon = st.slider("Rota süresi (s)", 5, 60, 20, 1)
             d = Params()
             p = replace(
                 d,
                 L=st.number_input("Boy L (m)", 0.5, 5.0, d.L, 0.05),
                 mass=st.number_input("Kütle (kg)", 1.0, 200.0, d.mass, 1.0),
                 hull_sep=st.number_input("Gövde aralığı (m)", 0.2, 2.0, d.hull_sep, 0.05),
-                zeta_deg=st.number_input("Eq.12 referans ζ (°) — yalnız karşılaştırma çizgisi", 20.0, 70.0, d.zeta_deg, 1.0),
-                CDA_windage=st.number_input("Su üstü rüzgar direnci CD·A (m²)", 0.0, 1.0, d.CDA_windage, 0.01),
                 hull_B=st.number_input("Tek gövde genişliği B (m)", 0.05, 0.6, d.hull_B, 0.01),
                 Cb=st.number_input("Blok katsayısı Cb", 0.2, 0.8, d.Cb, 0.01),
-                C_R=st.number_input("Artık direnç katsayısı C_R", 0.0, 0.05, d.C_R, 0.001, format="%.3f"),
+                C_R=st.number_input("Artık direnç C_R", 0.0, 0.05, d.C_R, 0.001, format="%.3f"),
                 A_wing=st.number_input("Kanat alanı (m²)", 0.05, 3.0, d.A_wing, 0.01),
                 A_soft=st.number_input("Bez yelken alanı (m²)", 0.05, 3.0, d.A_soft, 0.01),
-                h_CE=st.number_input("Yelken basınç merkezi kolu (m)", 0.1, 3.0, d.h_CE, 0.05),
+                CDA_windage=st.number_input("Su üstü rüzgar direnci CD·A (m²)", 0.0, 1.0, d.CDA_windage, 0.01),
+                h_CE=st.number_input("Basınç merkezi kolu (m)", 0.1, 3.0, d.h_CE, 0.05),
                 CLa_hull=st.number_input("Gövde yanal eğim (1/rad)", 0.2, 6.0, d.CLa_hull, 0.1),
-                x_mast=st.number_input("Direk konumu x (m, merkezin önü +)", -0.8, 0.8, d.x_mast, 0.01),
-                x_CLR=st.number_input("Gövde yanal direnç merkezi x (m)", -0.8, 0.8, d.x_CLR, 0.01),
+                x_mast=st.number_input("Direk konumu x (m)", -0.8, 0.8, d.x_mast, 0.01),
+                x_CLR=st.number_input("Yanal direnç merkezi x (m)", -0.8, 0.8, d.x_CLR, 0.01),
                 A_rud=st.number_input("Dümen alanı (m²)", 0.005, 0.2, d.A_rud, 0.005, format="%.3f"),
-                k_munk=st.number_input("Munk momenti katsayısı (1 = teorik)", 0.0, 1.5, d.k_munk, 0.05,
-                                       help="0: ihmal, 1: potansiyel akış teorisi. Prototipte dönme testiyle kalibre edin."),
+                k_munk=st.number_input("Munk katsayısı (1 = teorik)", 0.0, 1.5, d.k_munk, 0.05),
+                zeta_deg=st.number_input("Eq.(12) referans ζ (°)", 20.0, 70.0, d.zeta_deg, 1.0),
                 boom_rigid=boom_lbl.startswith("Rijit"),
             )
-            st.caption(f"Kütleden türetilen: su çekimi T = {p.draft * 100:.1f} cm, ıslak alan "
-                       f"S = {p.S_wet:.2f} m², yanal alan = {p.A_lat:.2f} m², "
-                       f"maks. doğrultucu moment = {p.righting_moment:.0f} N·m")
+            st.caption(f"T = {p.draft * 100:.1f} cm · S = {p.S_wet:.2f} m² · m22 = {p.m22:.1f} kg · "
+                       f"Iz = {p.Iz:.1f} kg·m² · RM = {p.righting_moment:.0f} N·m")
 
+    trim_auto = ("opt" if auto_method.startswith("Optimum") else True) if trim_on else False
+
+    # ---------------- Fizik (değişmedi) ----------------
     eq = solve_equilibrium(heading, tws_kt, delta_r, trim_auto, trim_manual, sail_type, p)
-    path, stalled = predict_path(heading, tws_kt, delta_r, trim_auto, trim_manual, sail_type, p, horizon)
-    lim = nogo_limit(tws_kt, sail_type, p)              # fiziksel ölü açı sınırı (kuvvet dengesi)
+    path, _ = predict_path(heading, tws_kt, delta_r, trim_auto, trim_manual, sail_type, p, horizon)
+    lim = nogo_limit(tws_kt, sail_type, p)
     status, scol, twa = point_of_sail(heading, eq, lim)
-
-    st.title("Modül 1 — Statik Kuvvet Dengesi & Rota Tahmini")
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Tahmini Hız", f"{eq['V'] / KT2MS:.2f} kt")
-    c2.metric("İleri İtiş Fx", f"{eq['Fx']:+.1f} N")
-    c3.metric("Yanal Fy", f"{eq['Fy']:+.1f} N",
-              help="+ sancağa, − iskeleye doğru (gövde ekseni)")
-    c4.metric("Drift (Sapma)", "—" if eq["lam"] is None else f"{eq['lam']:+.1f}°",
-              help="Rota φ − pruva θ ([M22] Eq.2'deki φ≠θ). Tekne dururken tanımsız.")
-
-    extra = ""
-    if status.startswith("ÖLÜ"):
-        extra = (f" — Kuvvet dengesi: bu pruvada itiş, direnci hiçbir trimle yenemiyor "
-                 f"(fiziksel sınır ±{lim:.1f}°)." if lim is not None else " — Bu rüzgarda hiçbir pruvada yol yok.")
-    elif status.startswith("YOL YOK"):
-        extra = " — Optimum trimle bu pruvada yol alınabilir; mevcut trim yetersiz."
-    elif eq["flapping"]:
-        extra = " — Bez yelken ÇIRPIYOR (luff): rüzgar ıskota sınırından daha önden geliyor."
-    elif eq["backwinded"]:
-        extra = " — Bez yelken TERS DOLMUŞ (backing): kuvvet tekneyi geri/yana itiyor."
-    st.markdown(
-        f"<div style='display:inline-block;padding:6px 16px;border-radius:20px;background:{scol};"
-        f"color:white;font-weight:700;letter-spacing:.5px'>{status}</div>"
-        f"<span style='margin-left:10px;color:#555'>Gerçek rüzgar açısı TWA = {twa:.0f}°{extra}</span>",
-        unsafe_allow_html=True)
-
-    if eq["capsize"]:
-        st.error(f"DEVRİLME RİSKİ: yatırma momenti {eq['HM']:.0f} N·m > doğrultucu moment "
-                 f"{eq['RM']:.0f} N·m (m·g·b/2). Rüzgarüstü gövde sudan kalkar; bu durumda statik "
-                 "sonuçlar geçersizdir — yelkeni boşaltın / alanı küçültün.")
-    elif eq["HM"] > 0.7 * eq["RM"]:
-        st.warning(f"Yatırma momenti doğrultucu momentin %{100 * eq['HM'] / eq['RM']:.0f}'i — "
-                   "rüzgarüstü gövde hafiflemiş.")
-    if eq["Fr"] > 0.40:
-        st.warning(f"Froude sayısı Fr = {eq['Fr']:.2f} > 0.40: dalga direnci hızla artar; sabit C_R "
-                   "kabulü bu bölgede direnci düşük tahmin eder → hız İYİMSERDİR.")
-
-    if eq.get("crab"):
-        st.error("Yalnızca yana sürüklenme dengesi var: tekne çok yavaş ve büyük drift açısıyla yan yan "
-                 f"gidiyor; dümene gelen akış dümen stall açısını (±{p.rud_stall:.0f}°) aşıyor → yön tutulamaz, "
-                 "kontrollü seyir YOK.")
-    elif eq.get("no_eq"):
-        st.error("İleri hareket dengesi yok: yelken itişi, bu pruvada yanal kaymanın yarattığı direnci "
-                 "yenemiyor → tekne yol alamaz, rüzgar altına sürüklenir.")
-    elif eq["V"] > 0 and (eq["V"] < 0.3 or abs(eq["lam"]) > 20):
-        st.warning(f"Dümen hakimiyeti zayıf: V = {eq['V']:.2f} m/s, drift = {eq['lam']:+.0f}°. Dümene gelen akışı "
-                   f"yana kayma belirliyor (α_dümen = {eq['alpha_r']:+.0f}°); dümen komutu beklenen yönü vermeyebilir.")
-
-    # ---------------- Yönelim telemetrisi ----------------
-    st.subheader("Yönelim telemetrisi")
     eq0 = eq if delta_r == 0 else solve_equilibrium(heading, tws_kt, 0, trim_auto, trim_manual, sail_type, p)
-    rel_wind = wrap180(WIND_FROM_DEG - heading)          # + : rüzgar sancaktan
-    if eq["V"] > 0 and abs(eq["r"]) > 0.05:
-        turn_txt = "Sancağa ↻" if eq["r"] > 0 else "İskeleye ↺"
-        turn_txt += " (orsa)" if np.sign(eq["r"]) == np.sign(rel_wind) else " (boca)"
-    else:
-        turn_txt = "Düz"
-    end_h = path[-1, 4] if len(path) > 1 else heading
-    t1, t2, t3, t4, t5 = st.columns(5)
-    t1.metric("Hareket yönü φ", "—" if eq["V"] == 0 else f"{eq['course'] % 360:.1f}°",
-              help="Teknenin suya göre gerçekte gittiği yön (COG) = pruva + drift")
-    t2.metric("Dönüş hızı r", f"{eq['r']:+.2f} °/s", help="+ sancağa (saat yönü). " + turn_txt)
-    t3.metric("Dönüş yarıçapı", "∞ (düz)" if not math.isfinite(eq["radius"]) else f"{eq['radius']:.1f} m",
-              help="R = V / r (durağan dönüş)")
-    t4.metric("Düz rota dümeni", "—" if eq["d_bal"] is None else f"{eq['d_bal']:+.1f}°",
-              help="r = 0 olması için gereken merkezi dümen açısı (yelken momentini dengeler)")
-    t5.metric(f"{horizon} s sonra pruva", f"{end_h:.0f}°",
-              help=f"Net pruva değişimi {wrap180(end_h - heading):+.0f}°")
-    st.caption((f"Fiziksel ölü açı sınırı (kuvvet dengesi, optimum trim): **±{lim:.1f}°** — "
-                f"Jaulin Eq.(12) referansı ±{p.zeta_deg:.0f}°.  " if lim is not None else
-                "Bu rüzgarda hiçbir pruvada ileri denge yok.  ")
-               + f"Dönüş yönü: **{turn_txt}**.  "
-               + ("" if eq0["V"] == 0 or abs(eq0["r"]) < 0.05 else
-                  f"Dümen 0°'de tekne kendiliğinden **{'sancağa' if eq0['r'] > 0 else 'iskeleye'}** "
-                  f"döner ({eq0['r']:+.2f} °/s) → "
-                  + ("**ORSA eğilimi** (weather helm)" if np.sign(eq0["r"]) == np.sign(rel_wind)
-                     else "**BOCA eğilimi** (lee helm)")
-                  + ": yelken basınç merkezi ile yanal direnç merkezi dengede değil."))
+    rel_wind = wrap180(WIND_FROM_DEG - heading)
 
-    if eq["V"] == 0 and len(path) > 1:               # ölü açıdaki teknenin zaman içindeki davranışı
-        twa_t = np.abs(((path[:, 4] - WIND_FROM_DEG + 180) % 360) - 180)
-        esc = np.where((twa_t > (lim or 180)) & (path[:, 5] > 0.05))[0]
-        umin = path[:, 5].min()
-        drift_m = math.hypot(path[-1, 0], path[-1, 1])
-        msg = (f"**Ölü açıdaki davranış (dinamik):** tekne {'geriye (sternway) en fazla ' + format(-umin, '.2f') + ' m/s hızla ' if umin < -0.02 else ''}"
-               f"rüzgar altına sürükleniyor; {horizon} s'de {drift_m:.0f} m yer değiştiriyor. ")
-        if len(esc):
-            msg += (f"Pruva **{path[esc[0], 2]:.1f} s'de düşüyor** (TWA {twa_t[esc[0]]:.0f}°) ve tekne yeniden yol alıyor.")
+    # ---------------- Üst şerit: 4 kart + durum kapsülü ----------------
+    badge_txt = {"ÖLÜ AÇI (No-Go Zone)": "NO-GO", "YOL YOK — trim uygun değil": "YOL YOK"}.get(status, status)
+    badge_tip = (f"Gerçek rüzgar açısı TWA = {twa:.0f}°. "
+                 + (f"Fiziksel ölü açı sınırı ±{lim:.1f}° (kuvvet dengesinden; Jaulin Eq.12 referansı "
+                    f"±{p.zeta_deg:.0f}°). " if lim is not None else "")
+                 + ("Bu pruvada itiş, direnci hiçbir trimle yenemiyor." if badge_txt == "NO-GO" else
+                    "Optimum trimle yol alınabilir; mevcut trim yetersiz." if badge_txt == "YOL YOK" else ""))
+    drift_txt = "—" if eq["lam"] is None else f"{eq['lam']:+.1f}"
+    cards = "".join([
+        _card("Tahmini hız", f"{eq['V'] / KT2MS:.2f}", "kt", "#38BDF8",
+              "Durağan denge hızı: yelken itişi = toplam su direnci (gövde + dümen + indüklenmiş)."),
+        _card("İleri itiş Fx", f"{eq['Fx']:+.1f}", "N", "#22C55E",
+              "Yelken + su üstü rüzgar direncinin pruva yönündeki bileşeni (gövde ekseni)."),
+        _card("Yanal Fy", f"{eq['Fy']:+.1f}", "N", "#EF4444",
+              "Aerodinamik yanal kuvvet. + sancağa, − iskeleye."),
+        _card("Drift / sapma", drift_txt, "°", "#FBBF24",
+              "Rota φ − pruva θ (Morge Eq.2'deki φ ≠ θ). Tekne dururken tanımsız."),
+    ])
+    badge = (f'<div class="ck-badge" style="background:{scol}" title="{_esc(badge_tip)}">'
+             f'{badge_txt}<small>TWA {twa:.0f}° ⓘ</small></div>')
+    st.markdown(f'<div class="ck-row">{cards}{badge}</div>', unsafe_allow_html=True)
+
+    # ---------------- Ana alan: kahraman tuval + yönelim paneli ----------------
+    c_hero, c_side = st.columns([3.15, 1.2], gap="small")
+    with c_hero:
+        hero = st.container(key="hero")
+        fig = build_cockpit_figure(heading, eq, path, sail_type, delta_r, p, lim, tws_kt, horizon)
+        cfg = {"displaylogo": False, "responsive": True, "scrollZoom": True,
+               "modeBarButtonsToRemove": ["select2d", "lasso2d", "autoScale2d"]}
+        try:
+            hero.plotly_chart(fig, width="stretch", height="stretch", config=cfg)
+        except Exception:
+            hero.plotly_chart(fig, use_container_width=True, config=cfg)
+
+    with c_side:
+        if eq["V"] > 0 and abs(eq["r"]) > 0.05:
+            turn = ("Sancağa ↻" if eq["r"] > 0 else "İskeleye ↺") + \
+                   (" · orsa" if np.sign(eq["r"]) == np.sign(rel_wind) else " · boca")
         else:
-            msg += (f"Pruva düşmüyor: {horizon} s sonunda TWA {twa_t[-1]:.0f}° — tekne ölü açıda **kalıyor** "
-                    "(yelken basınç merkezi yanal direnç merkezinin gerisinde → rüzgara dönme / weathervane). "
-                    "Kurtulmak için dümen veya trim manevrası gerekir; ya da direk/CLR konumunu kontrol edin.")
-        st.info(msg)
+            turn = "Düz"
+        end_h = path[-1, 4] if len(path) > 1 else heading
+        rows = "".join([
+            _row("Hareket yönü φ", "—" if eq["V"] == 0 else f"{eq['course'] % 360:.1f}°",
+                 "Teknenin suya göre gerçekte gittiği yön = pruva + drift", "#22D3EE"),
+            _row("Dönüş", f"{eq['r']:+.2f}°/s", f"{turn}. + sancağa (saat yönü).", "#E2E8F0"),
+            _row("Dönüş yarıçapı", "∞" if not math.isfinite(eq["radius"]) else f"{eq['radius']:.1f} m",
+                 "Durağan dönüş: R = V / r"),
+            _row("Düz rota dümeni", "—" if eq["d_bal"] is None else f"{eq['d_bal']:+.1f}°",
+                 "r = 0 için gereken merkezi dümen açısı (yelken + Munk momentini dengeler)", "#60A5FA"),
+            _row(f"{horizon} s sonra pruva", f"{end_h:.0f}°",
+                 f"Dinamik rota sonunda net pruva değişimi {wrap180(end_h - heading):+.0f}°"),
+            _row("Ölü açı sınırı", "—" if lim is None else f"±{lim:.1f}°",
+                 "Kuvvet dengesinden (optimum trim, dümen 0). Eq.(12) referansı noktalı çizgide.", "#F87171"),
+            _row("Yelken δs / α", f"{eq['delta_s']:+.0f}° / {eq['alpha']:.0f}°",
+                 f"Uygulanan yelken açısı ve hücum açısı. Görünür rüzgar {eq['aaw'] / KT2MS:.1f} kt, "
+                 f"pruvadan {eq['beta']:+.0f}° (Morge Eq.2)."),
+        ])
+        st.markdown(f'<div class="ck-panel"><div class="ck-h">Yönelim · {turn}</div>{rows}</div>',
+                    unsafe_allow_html=True)
 
-    fig = build_figure(heading, eq, path, stalled, sail_type, delta_r, p, lim)
-    try:
-        st.plotly_chart(fig, width="stretch")          # Streamlit ≥ 1.50
-    except Exception:
-        st.plotly_chart(fig, use_container_width=True)  # eski sürümler
+        # Uyarı çipleri (açıklamalar tooltip'te)
+        chips = []
+        if eq["capsize"]:
+            chips.append(_chip("⛔ Devrilme riski", "#EF4444",
+                               f"Yatırma momenti {eq['HM']:.0f} N·m > doğrultucu moment {eq['RM']:.0f} N·m "
+                               "(m·g·b/2). Rüzgarüstü gövde kalkar; statik sonuç geçersiz."))
+        elif eq["HM"] > 0.7 * eq["RM"]:
+            chips.append(_chip(f"⚠ Yatırma %{100 * eq['HM'] / eq['RM']:.0f}", "#F59E0B",
+                               "Yatırma momenti doğrultucu momente yaklaşıyor; rüzgarüstü gövde hafif."))
+        if eq["Fr"] > 0.40:
+            chips.append(_chip(f"⚠ Fr {eq['Fr']:.2f}", "#F59E0B",
+                               "Froude > 0.40: dalga direnci hızla artar; sabit C_R kabulüyle hız iyimser."))
+        if eq.get("crab"):
+            chips.append(_chip("↯ Yana sürüklenme", "#EF4444",
+                               "Yalnız büyük driftli yavaş denge var; dümen akışı stall'da → kontrollü seyir yok."))
+        elif eq["V"] > 0 and (eq["V"] < 0.3 or abs(eq["lam"]) > 20):
+            chips.append(_chip("⚠ Dümen zayıf", "#F59E0B",
+                               f"V={eq['V']:.2f} m/s, drift {eq['lam']:+.0f}°: dümene gelen akışı yana kayma "
+                               "belirliyor."))
+        if eq["flapping"]:
+            chips.append(_chip("〰 Yelken çırpıyor", "#F87171",
+                               "Rüzgar ıskota sınırından daha önden geliyor; yelken akışa hizalandı (luff)."))
+        elif eq["backwinded"]:
+            chips.append(_chip("⇄ Ters dolmuş", "#C084FC",
+                               "Rijit bumba rüzgarüstünde: kamburu ters dönen yelken tekneyi geri/yana itiyor."))
+        if eq["V"] == 0 and len(path) > 1:
+            twa_t = np.abs(((path[:, 4] - WIND_FROM_DEG + 180) % 360) - 180)
+            esc = np.where((twa_t > (lim or 180)) & (path[:, 5] > 0.05))[0]
+            umin = path[:, 5].min()
+            tip = (f"Dinamik: geriye en fazla {-umin:.2f} m/s, {horizon} s'de "
+                   f"{math.hypot(path[-1, 0], path[-1, 1]):.0f} m rüzgar altına sürüklenme. ")
+            if len(esc):
+                chips.append(_chip(f"↘ Pruva {path[esc[0], 2]:.0f} s'de düşüyor", "#22C55E",
+                                   tip + "Ardından tekne yeniden yol alıyor."))
+            else:
+                chips.append(_chip("⟲ Ölü açıda kalıyor", "#EF4444",
+                                   tip + "CE yanal direnç merkezinin gerisinde → rüzgara dönme eğilimi. "
+                                         "Kurtulma: dümen/ters yelken manevrası."))
+        if not chips:
+            chips.append(_chip("✓ Uyarı yok", "#22C55E", "Devrilme, Froude, dümen ve yelken durumu normal."))
+        st.markdown(f'<div class="ck-chips">{"".join(chips)}</div>', unsafe_allow_html=True)
 
-    a, b = st.columns(2)
-    with a:
-        st.markdown("**Denge durumu**")
-        st.write(
-            f"- Görünür rüzgar: **{eq['aaw'] / KT2MS:.1f} kt**, pruvadan **{eq['beta']:+.0f}°** "
-            f"(+ sancak) — [M22] Eq.(2)\n"
-            f"- Kardioid δs_max: **{eq['dsmax']:.0f}°** — [J13] Eq.(11)\n"
-            f"- Uygulanan yelken açısı δs: **{eq['delta_s']:+.0f}°**, hücum açısı α: **{eq['alpha']:.0f}°**\n"
-            f"- İleri denge: yelken Fx **{eq['Fx']:+.1f} N** ↔ toplam direnç (gövde+dümen+indüklenmiş) **{eq['R']:.1f} N**\n"
-            f"- Rota φ = θ + drift: **{eq['course'] % 360:.1f}°**, Froude Fr = **{eq['Fr']:.2f}**\n"
-            f"- Yatırma / doğrultucu moment: **{eq['HM']:.0f} / {eq['RM']:.0f} N·m**")
-        if eq["V"] > 0:
-            mur = (p.mass + p.m11) * eq["V"] * math.cos(math.radians(eq["lam"])) * math.radians(eq["r"])
-            st.markdown("**Kuvvet / moment diyagramı (dengede toplam ≈ 0)**")
-            st.table({
-                "Bileşen": ["Yelken + rüzgar direnci (CE)", "Gövde (şerit teorisi)", "Merkezi dümen",
-                            "Munk momenti", "Merkezcil −(m+m11)·u·r", "TOPLAM"],
-                "Yanal Y (N)": [f"{eq['Fy']:+.2f}", f"{eq['Y_h']:+.2f}", f"{eq['Y_r']:+.2f}", "—", f"{-mur:+.2f}",
-                                f"{eq['Fy'] + eq['Y_h'] + eq['Y_r'] - mur:+.3f}"],
-                "Moment N (N·m)": [f"{eq['N_s']:+.3f}", f"{eq['N_h']:+.3f}", f"{eq['N_r']:+.3f}",
-                                   f"{eq['N_munk']:+.3f}", "—",
-                                   f"{eq['N_s'] + eq['N_h'] + eq['N_r'] + eq['N_munk']:+.4f}"],
-            })
-    with b:
-        st.markdown("**Kaynak & varsayımlar**")
-        st.caption(
-            "Makalelerden: görünür rüzgar [M22] Eq.(1)-(2); kardioid trim ve dümen işareti [J13] Eq.(11); "
-            "[J13] Eq.(12) ζ=45° yalnız referans çizgisi — ölü açı kuvvet dengesinden hesaplanır. Standart gemi mühendisliği: 3-DOF rijit gövde denge "
-            "denklemleri (X, Y, N; durağan hal, ek kütle ihmal), şerit teorisi ile gövde sönümü, "
-            "ITTC-1957 sürtünme çizgisi, Mumford ıslak alan formülü, m·g·b/2 doğrultucu moment. "
-            "VARSAYIM (makalelerde yok): CL/CD eğrileri, form faktörü, C_R, gövde yanal eğimi ve "
-            "çapraz akış katsayısı, dümen alanı, DİREK ve YANAL DİRENÇ MERKEZİ konumları (yönelimi en "
-            "çok bunlar belirler — prototipten ölçüp girin). Kartlar durağan dengeden; ROTA ise 3-DOF hareket "
-            "denklemlerinin RK4 entegrasyonundan (kütle, Iz, ek kütle m22 ve Iz_ek şerit teorisinden; m11 ve "
-            "Munk momenti ihmali varsayım). Ölü açıda tekne donmaz: geriye ve rüzgar altına sürüklenir.")
+        st.markdown('<div class="ck-h" style="margin-top:4px">Rota haritası (gerçek ölçek)</div>',
+                    unsafe_allow_html=True)
+        try:
+            st.plotly_chart(build_minimap(path, heading, p, lim), width="stretch",
+                            config={"displayModeBar": False, "staticPlot": True})
+        except Exception:
+            st.plotly_chart(build_minimap(path, heading, p, lim), use_container_width=True,
+                            config={"displayModeBar": False, "staticPlot": True})
+
+        pc1, pc2 = st.columns(2)
+        with pc1.popover("Kuvvet dengesi", use_container_width=True):
+            if eq["V"] > 0:
+                mur = (p.mass + p.m11) * eq["V"] * math.cos(math.radians(eq["lam"])) * math.radians(eq["r"])
+                st.table({
+                    "Bileşen": ["Yelken + rüzgar (CE)", "Gövde", "Dümen", "Munk", "Merkezcil", "TOPLAM"],
+                    "Y (N)": [f"{eq['Fy']:+.2f}", f"{eq['Y_h']:+.2f}", f"{eq['Y_r']:+.2f}", "—", f"{-mur:+.2f}",
+                              f"{eq['Fy'] + eq['Y_h'] + eq['Y_r'] - mur:+.3f}"],
+                    "N (N·m)": [f"{eq['N_s']:+.3f}", f"{eq['N_h']:+.3f}", f"{eq['N_r']:+.3f}",
+                                f"{eq['N_munk']:+.3f}", "—",
+                                f"{eq['N_s'] + eq['N_h'] + eq['N_r'] + eq['N_munk']:+.4f}"],
+                })
+                st.caption(f"İleri: Fx {eq['Fx']:+.1f} N ↔ direnç {eq['R']:.1f} N · Fr {eq['Fr']:.2f} · "
+                           f"yatırma {eq['HM']:.0f}/{eq['RM']:.0f} N·m")
+            else:
+                st.caption("Tekne yol almıyor: durağan kuvvet dengesi yok (ölü açı).")
+        with pc2.popover("Kaynaklar", use_container_width=True):
+            st.caption(
+                "Morge et al. 2022 Eq.(1)-(2): görünür rüzgar. Jaulin & Le Bars 2013 Eq.(11): kardioid trim, "
+                "dümen işareti; Eq.(12) ζ yalnız referans. Ölü açı kuvvet dengesinden. Fossen 3-DOF (ek kütle, "
+                "Munk), şerit teorisi, ITTC-1957, Mumford ıslak alan, m·g·b/2 doğrultucu moment. VARSAYIM: "
+                "CL/CD eğrileri, C_R, CD·A, gövde eğimi, direk/CLR konumu, Munk katsayısı, dümen alanı.")
 
 
 if __name__ == "__main__":
