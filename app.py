@@ -839,6 +839,14 @@ header[data-testid="stHeader"], footer, #MainMenu, [data-testid="stToolbar"],
 [data-testid="stDecoration"], [data-testid="stStatusWidget"] {{ display:none !important; }}
 .block-container {{ padding:0.55rem 1rem 0 1rem !important; max-width:100% !important; }}
 [data-testid="stSidebar"] {{ background:#0B1222; border-right:1px solid #1E293B; }}
+/* Sabit sol menü: küçültme düğmesi ve genişlik tutamacı yok, her koşulda açık */
+[data-testid="stSidebarCollapseButton"], [data-testid="stSidebarResizeHandle"],
+[data-testid="stExpandSidebarButton"], [data-testid="stSidebarCollapsedControl"] {{ display:none !important; }}
+section[data-testid="stSidebar"] {{ transform:none !important; visibility:visible !important;
+    min-width:300px !important; width:300px !important; max-width:300px !important; }}
+section[data-testid="stSidebar"] > div {{ width:300px !important; }}
+[data-testid="stSidebarHeader"] {{ height:0.4rem !important; min-height:0 !important; padding:0 !important;
+    margin:0 !important; overflow:hidden; }}
 [data-testid="stSidebar"] .block-container, [data-testid="stSidebarContent"] {{ padding-top:0.6rem; }}
 [data-testid="stSidebarUserContent"] {{ padding-top:0.4rem; }}
 [data-testid="stVerticalBlock"] {{ gap:0.45rem; }}
