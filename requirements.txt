@@ -1,3 +1,6 @@
-streamlit>=1.50
+# Streamlit 1.66 serisinde sabit: A→B ve Kumanda sayfalarının kullandığı st.components.v1.html için Streamlit
+# "kaldırılacak" uyarısı veriyor. Üst sınır, o fonksiyonu kaldırabilecek bir sürümün otomatik kurulmasını önler.
+streamlit>=1.50,<1.67
 plotly>=5.20
 numpy>=1.26
+pandas>=2.0
