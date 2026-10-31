@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root { --bg:#0F172A; --panel:#1E293B; --line:#334155; --txt:#E2E8F0; --muted:#94A3B8; --water:#0B1A2E;
+        --glow:#22D3EE; --green:#22C55E; --red:#EF4444; --orange:#F59E0B; --purple:#A78BFA; --blue:#60A5FA; }
+* { box-sizing:border-box; }
+html, body { margin:0; background:var(--bg); color:var(--txt); font-size:13px;
+             font-family:"Source Sans Pro","Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif; }
+#app { display:flex; flex-direction:column; gap:8px; padding:2px 2px 6px; outline:none; }
+.bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-height:32px; }
+button, select { background:var(--panel); color:var(--txt); border:1px solid var(--line); border-radius:8px;
+                 padding:5px 11px; font:inherit; cursor:pointer; white-space:nowrap; }
+button:hover, select:hover { border-color:#475569; }
+button.on { border-color:var(--glow); color:var(--glow); background:#0E2A3A; }
+button.ap.on { border-color:var(--purple); color:var(--purple); background:#241B3D; }
+button.big { font-weight:700; min-width:118px; }
+.chip { padding:3px 10px; border-radius:999px; border:1px solid; font-size:12px; white-space:nowrap; }
+.sp { flex:1; }
+.main { display:flex; gap:8px; align-items:stretch; }
+.mapwrap { position:relative; flex:1; min-width:0; min-height:520px; border:1px solid var(--line); border-radius:12px;
+           overflow:hidden; background:var(--water); }
+#map { position:absolute; inset:0; width:100%; height:100%; display:block; }
+.ov { position:absolute; background:rgba(15,23,42,.9); border:1px solid var(--line); border-radius:8px;
+      padding:4px 9px; pointer-events:none; }
+#info { top:8px; left:8px; max-width:calc(100% - 150px); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#wind { top:8px; right:8px; text-align:center; color:var(--blue); font-weight:700; font-size:12px; line-height:1.25; }
+#msg { left:50%; bottom:14px; transform:translateX(-50%); text-align:center; font-size:14px; padding:10px 18px;
+       max-width:min(440px, calc(100% - 24px)); line-height:1.5; }
+#msg b { font-size:17px; }
+.side { width:360px; flex:0 0 360px; display:flex; flex-direction:column; gap:8px; min-width:0; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:8px 10px; }
+.card h4 { margin:0 0 6px; font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+           display:flex; justify-content:space-between; gap:6px; font-weight:700; }
+.card h4 span:last-child { text-transform:none; letter-spacing:0; font-weight:600; overflow:hidden; text-overflow:ellipsis;
+                           white-space:nowrap; min-width:0; }
+.ctl { display:grid; grid-template-columns:76px 1fr 58px; align-items:center; gap:6px; height:22px; font-size:12px; }
+.ctl .l { color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ctl .tr { position:relative; height:12px; background:var(--bg); border-radius:6px; overflow:hidden; }
+.ctl .tr::after { content:""; position:absolute; left:50%; top:0; bottom:0; width:1px; background:#64748B; }
+.ctl .fill { position:absolute; top:2px; bottom:2px; border-radius:3px; }
+.ctl .mk { position:absolute; top:0; bottom:0; width:2px; background:#F8FAFC; }
+.ctl .v { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:700; }
+.pads { display:flex; align-items:center; gap:10px; margin-top:6px; }
+.pads svg { flex:none; }
+.pads .t { color:var(--muted); font-size:11.5px; line-height:1.4; min-width:0; }
+.gauges { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px 8px; }
+.g { min-width:0; }
+.g .l { font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.g .v { font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden;
+        text-overflow:ellipsis; }
+.g .v small { font-size:11px; color:var(--muted); font-weight:600; margin-left:2px; }
+.keys { display:grid; grid-template-columns:auto 1fr; gap:2px 10px; font-size:12px; }
+.keys b { color:#CBD5E1; white-space:nowrap; }
+.keys span { color:var(--muted); min-width:0; }
+.charts { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; }
+.chart { background:var(--panel); border:1px solid var(--line); border-radius:12px; height:118px; overflow:hidden; }
+.chart svg { width:100%; height:100%; display:block; }
+.foot { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.foot .sum { color:var(--muted); font-size:12.5px; font-variant-numeric:tabular-nums; }
+.foot .sum b { color:var(--txt); }
+@media (max-width: 1100px) {
+  .main { flex-direction:column; }
+  .mapwrap { flex:none; height:440px; min-height:0; }
+  .side { width:auto; flex:none; display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); }
+  .charts { grid-template-columns:1fr 1fr; }
+}
+@media (max-width: 560px) { .charts { grid-template-columns:1fr; } .gauges { grid-template-columns:1fr 1fr; } }
+</style>
+</head>
+<body>
+<div id="app" tabindex="0">
+  <div class="bar">
+    <button id="bRun" class="big">▶ Başlat</button>
+    <button id="bReset">⟲ Baştan</button>
+    <select id="spd" title="Benzetim hızı (gerçek zamana göre)">
+      <option value="1" selected>×1 gerçek zaman</option><option value="2">×2</option><option value="4">×4</option>
+    </select>
+    <button id="bAP" class="ap" title="X / P: otopilot (kaskad PID) dümeni devralır">🤖 Otopilot: kapalı</button>
+    <button id="bTrim" title="A / T: otomatik yelken trimi">⛵ Oto trim</button>
+    <button id="bFollow" class="on" title="Y / F">🎯 Takip</button>
+    <button id="bAll" title="Y / F">🗺 Tüm rota</button>
+    <button id="bIn" title="Yakınlaştır (D-pad ↑ · +)">+</button>
+    <button id="bOut" title="Uzaklaştır (D-pad ↓ · −)">−</button>
+    <span class="sp"></span>
+    <span id="pad" class="chip"></span>
+  </div>
+  <div class="main">
+    <div class="mapwrap">
+      <svg id="map"></svg>
+      <div id="info" class="ov"></div>
+      <div id="wind" class="ov"></div>
+      <div id="msg" class="ov"></div>
+    </div>
+    <div class="side">
+      <div class="card">
+        <h4><span>Kumanda</span><span id="mode"></span></h4>
+        <div class="ctl"><span class="l">Dümen δr</span><div class="tr" id="trR"></div><span class="v" id="vR"></span></div>
+        <div class="ctl"><span class="l">Dümen trimi</span><div class="tr" id="trT"></div><span class="v" id="vT"></span></div>
+        <div class="ctl"><span class="l">Yelken δs</span><div class="tr" id="trS"></div><span class="v" id="vS"></span></div>
+        <div class="pads"><svg id="sticks" width="112" height="52"></svg><div class="t" id="padT"></div></div>
+      </div>
+      <div class="card">
+        <h4><span>Göstergeler</span><span id="twa"></span></h4>
+        <div class="gauges" id="gauges"></div>
+      </div>
+      <div class="card">
+        <h4><span>Tuşlar</span><span>kumanda · klavye</span></h4>
+        <div class="keys">
+          <b>Sol çubuk ←→ · ← →</b><span>dümen (bırakınca trime döner)</span>
+          <b>LB / RB · , .</b><span>dümen trimi −1° / +1°</span>
+          <b>Sağ çubuk ←→ · A D</b><span id="kSail"></span>
+          <b>A (✕) · T</b><span>otomatik yelken trimi aç/kapa</span>
+          <b>X (□) · P</b><span>otopilot devral / bırak</span>
+          <b>Start · Boşluk</b><span>başlat / duraklat</span>
+          <b>Back · R</b><span>baştan</span>
+          <b>Y (△) · F</b><span>takip / tüm rota</span>
+          <b>D-pad ↑↓ · + −</b><span>yakınlaştır / uzaklaştır</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="charts" id="charts"></div>
+  <div class="foot">
+    <button id="bCsvTr" title="Türkçe Excel: ';' ayraç, ondalık virgül">⬇ CSV · Excel (Türkçe)</button>
+    <button id="bCsv" title="',' ayraç, ondalık nokta">⬇ CSV · standart</button>
+    <span class="sum" id="sum"></span>
+  </div>
+</div>
+<script>
+/*__SIM__*/
+const D = __DATA__;
+const NS = "http://www.w3.org/2000/svg", KT = SIM.KT2MS, d2r = Math.PI / 180;
+const $ = id => document.getElementById(id);
+const el = (tag, attrs, parent) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+const f1 = v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
+const deg = v => ((v % 360) + 360) % 360;
+const cu = SIM.cu;
+const env = D.env, rt = D.rt, ap = D.ap, M = D.meta, DT = 0.025, WIN = 60;
+const AUTO_TRIM = env.trim === "man" ? "opt" : env.trim;          // A tuşunun açacağı otomatik yöntem
+const TRIM0 = env.trim, MANUAL0 = env.trim_manual, SHEET = env.sail === "soft" && !env.p.boom_rigid;
+const tHat = rt.t_hat, nHat = rt.n_hat;
+
+// ---------------- Benzetim durumu ----------------
+let S;
+function reset() {
+  S = { st: rt.st0.slice(), t: 0, k: 0, dr: 0, rtrim: 0, apOn: false, cs: { I_e: 0, I_h: 0 }, running: false, reached: null,
+        last: null, acc: 0, b: null, a: null, cmd: 0, R: {} };
+  env.trim = TRIM0; env.trim_manual = MANUAL0;
+  for (const k of RK) S.R[k] = [];
+  S.b = SIM.deriv(S.st, 0, env)[1];                                 // ilk kayıt ilk adımda (Python ile aynı zamanlama)
+  setRun(false); setAP(false); updTrimBtn();
+  $("msg").style.display = "";
+  $("msg").innerHTML = `<b>Hazır</b><br>Başlatmak için <b>Start</b> / <b>Boşluk</b> ya da ▶ Başlat.<br>` +
+    `Tekne rotanın ${Math.abs(D.e0).toFixed(0)} m ${D.e0 >= 0 ? "sancak" : "iskele"} tarafından başlar; hedef B.`;
+  draw(true);
+}
+const RK = ["t", "x", "y", "h", "V", "u", "v", "r", "e", "s", "cmd", "dr", "ds", "lam", "cog", "twa", "beta", "aaw", "Fx", "Fy",
+            "Y_h", "Y_r", "X_r", "R", "N_s", "N_r", "psi_star", "mode", "trim"];
+function rel() { return [S.st[0] - rt.A[0], S.st[1] - rt.A[1]]; }
+function eNow() { const q = rel(); return q[0] * nHat[0] + q[1] * nHat[1]; }
+function sNow() { const q = rel(); return q[0] * tHat[0] + q[1] * tHat[1]; }
+function record() {
+  const [x, y, h, u, v, r] = S.st, b = S.b, V = Math.hypot(u, v), lam = V > 1e-3 ? Math.atan2(v, u) / d2r : 0;
+  const row = { t: S.t, x, y, h: deg(h), V, u, v, r: r / d2r, e: eNow(), s: sNow(), cmd: S.cmd, dr: S.dr, ds: b.delta_s, lam,
+                cog: deg(h + lam), twa: SIM.wrap180(h - SIM.WIND_FROM_DEG), beta: b.beta, aaw: b.sf.aaw, Fx: b.Fx, Fy: b.Fy,
+                Y_h: b.Y_h, Y_r: b.Y_r, X_r: b.X_r, R: b.R, N_s: b.N_s, N_r: b.N_r,
+                psi_star: S.apOn && S.a ? deg(S.a.psi_star) : NaN, mode: S.apOn ? "otopilot" : "manuel",
+                trim: env.trim === "man" ? "elle" : "otomatik" };
+  for (const k of RK) S.R[k].push(row[k]);
+}
+
+// ---------------- Girdi: kumanda + klavye ----------------
+const keys = new Set();
+let kbR = 0, prevBtn = [], padName = null, padStd = true;
+const DZ = 0.12, dz = a => (Math.abs(a) < DZ ? 0 : Math.sign(a) * (Math.abs(a) - DZ) / (1 - DZ));
+addEventListener("keydown", ev => {
+  if (ev.target.tagName === "SELECT") return;
+  const k = ev.key.toLowerCase();
+  if (["arrowleft", "arrowright", "arrowup", "arrowdown", " "].includes(k)) ev.preventDefault();
+  if (ev.repeat) return;
+  keys.add(k);
+  if (k === " ") toggleRun();
+  else if (k === "r") reset();
+  else if (k === "p") setAP(!S.apOn);
+  else if (k === "t") toggleTrim();
+  else if (k === "f") setFollow(!follow);
+  else if (k === ",") nudgeTrim(-1);
+  else if (k === ".") nudgeTrim(1);
+  else if (k === "+" || k === "=") zoom(1.25);
+  else if (k === "-") zoom(0.8);
+});
+addEventListener("keyup", ev => keys.delete(ev.key.toLowerCase()));
+addEventListener("blur", () => keys.clear());
+function getPads() {                                                 // çerçeve göremezse üst pencereden dene
+  for (const w of [window, window.parent]) {
+    try {
+      const list = [...w.navigator.getGamepads()].filter(g => g && g.connected);
+      if (list.length) return list;
+    } catch (_) {}
+  }
+  return [];
+}
+function readPad() {
+  const pads = getPads(), g = pads.find(p => p.mapping === "standard") || pads[0];
+  if (!g) { padName = null; prevBtn = []; return null; }
+  padName = g.id; padStd = g.mapping === "standard";
+  const btn = g.buttons.map(b => b.pressed), edge = i => btn[i] && !prevBtn[i];
+  if (edge(9)) toggleRun();
+  if (edge(8)) reset();
+  if (edge(2)) setAP(!S.apOn);
+  if (edge(0)) toggleTrim();
+  if (edge(3)) setFollow(!follow);
+  if (edge(4)) nudgeTrim(-1);
+  if (edge(5)) nudgeTrim(1);
+  if (edge(12)) zoom(1.25);
+  if (edge(13)) zoom(0.8);
+  prevBtn = btn;
+  return { lx: dz(g.axes[0] || 0), rx: dz(g.axes[2] || 0) };
+}
+function nudgeTrim(d) { S.rtrim = Math.max(-ap.rud_max, Math.min(ap.rud_max, S.rtrim + d)); }
+function toggleTrim() {
+  if (env.trim === "man") env.trim = AUTO_TRIM;
+  else { env.trim_manual = S.b.delta_s; env.trim = "man"; }                 // elle trime o anki açıyla geç
+  updTrimBtn();
+}
+function updTrimBtn() { $("bTrim").classList.toggle("on", env.trim !== "man"); $("bTrim").textContent = env.trim !== "man" ? "⛵ Oto trim: açık" : "⛵ Oto trim: kapalı"; }
+function setAP(on) {
+  S.apOn = on; S.cs = { I_e: 0, I_h: 0 };                                     // devralırken integraller sıfırdan
+  $("bAP").classList.toggle("on", on); $("bAP").textContent = on ? "🤖 Otopilot: açık" : "🤖 Otopilot: kapalı";
+}
+function setRun(on) {
+  S.running = on; S.last = null; S.acc = 0;
+  $("bRun").textContent = on ? "⏸ Duraklat" : (S.t > 0 ? "▶ Sürdür" : "▶ Başlat");
+  if (on) $("msg").style.display = "none";
+}
+function toggleRun() { setRun(!S.running); }
+
+// ---------------- Benzetim adımı (sim_physics.js: Python ile aynı fizik ve otopilot) ----------------
+let inp = { lx: 0, rx: 0 };
+function step() {
+  if (S.apOn) { S.a = SIM.autopilot(S.st, rt, ap, S.cs, DT); S.cmd = S.a.cmd; }
+  else S.cmd = Math.max(-ap.rud_max, Math.min(ap.rud_max, inp.lx * ap.rud_max + S.rtrim));
+  if (inp.rx && env.trim === "man") {
+    const v = (SHEET ? Math.abs(env.trim_manual) : env.trim_manual) + 60 * inp.rx * DT;   // ıskota: yalnız |δs| anlamlı
+    env.trim_manual = Math.max(SHEET ? 0 : -90, Math.min(90, v));
+  }
+  S.dr = SIM.servo(S.dr, S.cmd, ap.rud_rate, DT);
+  const [k1, b] = SIM.deriv(S.st, S.dr * d2r, env);
+  S.b = b;
+  if (S.k % 10 === 0) record();                                      // her 0.25 s (10 adım)
+  S.st = SIM.rk4(S.st, S.dr * d2r, env, DT, k1);
+  S.k++; S.t = S.k * DT;
+  if (S.reached === null && sNow() >= rt.L) {
+    S.reached = S.t; record(); setRun(false);
+    const E = S.R.e.map(Math.abs);
+    $("msg").style.display = "";
+    $("msg").innerHTML = `<b style="color:#22C55E">B hizasına ulaştın · ${S.t.toFixed(1)} s</b><br>Son sapma ${f1(eNow())} m · ` +
+      `ortalama |e| ${(E.reduce((a, b) => a + b, 0) / E.length).toFixed(2)} m<br>Sürdürmek için Start / Boşluk, yeniden denemek için Back / R.`;
+  }
+}
+function tick(now) {
+  const pad = readPad();
+  // klavye: ok tuşları dümeni yumuşak kırar (Shift: tam), A/D yelken
+  const kd = (keys.has("arrowright") ? 1 : 0) - (keys.has("arrowleft") ? 1 : 0);
+  const dtF = S.last === null ? 0 : Math.min(0.1, (now - S.last) / 1000);
+  kbR = kd ? (keys.has("shift") ? kd : Math.max(-1, Math.min(1, kbR + kd * 2.5 * dtF))) : (Math.abs(kbR) < 4 * dtF ? 0 : kbR - Math.sign(kbR) * 4 * dtF);
+  const ks = (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0);
+  inp = { lx: pad && pad.lx ? pad.lx : kbR, rx: pad && pad.rx ? pad.rx : ks };
+  if (inp.rx && env.trim !== "man") toggleTrim();
+  if (S.running) {
+    if (S.last !== null) S.acc += Math.min(0.1, (now - S.last) / 1000) * +$("spd").value;
+    let n = 0;
+    while (S.acc >= DT && n < 40 && S.running) { step(); S.acc -= DT; n++; }
+  }
+  S.last = now;
+  draw(false);
+  requestAnimationFrame(tick);
+}
+
+// ---------------- Harita ----------------
+const map = $("map");
+const W = () => map.clientWidth, H = () => map.clientHeight;
+let view = null, follow = true, followS = null;
+const w2s = (x, y) => [W() / 2 + (x - view.cx) * view.s, H() / 2 - (y - view.cy) * view.s];
+function fitAll() {
+  const xs = [rt.A[0], rt.B[0], rt.st0[0]].concat(S.R.x), ys = [rt.A[1], rt.B[1], rt.st0[1]].concat(S.R.y);
+  if (D.ghost) { xs.push(...D.ghost.x); ys.push(...D.ghost.y); }
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const pad = 0.12, w = Math.max(x1 - x0, 10), h = Math.max(y1 - y0, 10);
+  view = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, s: Math.min(W() / (w * (1 + 2 * pad)), H() / (h * (1 + 2 * pad))) };
+}
+function setFollow(v) { follow = v; $("bFollow").classList.toggle("on", v); $("bAll").classList.toggle("on", !v); if (!v) fitAll(); }
+$("bFollow").onclick = () => setFollow(true);
+$("bAll").onclick = () => setFollow(false);
+const gGrid = el("g", {}, map), gTrack = el("g", {}, map), gPath = el("g", {}, map), gOver = el("g", {}, map);
+const CLR = ["#22C55E", "#F59E0B", "#EF4444"], cls = e => (Math.abs(e) < 1 ? 0 : Math.abs(e) < 5 ? 1 : 2);
+function niceStep() {
+  const target = 80 / view.s, steps = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000];
+  return steps.find(s => s >= target) || 10000;
+}
+function overlayBoxes() {
+  const m = map.getBoundingClientRect();
+  return ["info", "wind", "msg"].map(id => $(id)).filter(e => getComputedStyle(e).display !== "none")
+    .map(e => { const r = e.getBoundingClientRect(); return [r.left - m.left - 4, r.top - m.top - 4, r.right - m.left + 4, r.bottom - m.top + 4]; });
+}
+function drawGrid() {
+  gGrid.innerHTML = "";
+  if (!(view.s > 1e-9) || !isFinite(view.s)) return;                 // görünmeyen/boyutsuz harita
+  const st = niceStep(), w = W(), h = H(), boxes = overlayBoxes();
+  const free = (x0, y0, x1, y1) => !boxes.some(b => x0 < b[2] && x1 > b[0] && y0 < b[3] && y1 > b[1]);
+  const xmin = view.cx - w / 2 / view.s, xmax = view.cx + w / 2 / view.s, ymin = view.cy - h / 2 / view.s, ymax = view.cy + h / 2 / view.s;
+  for (let x = Math.ceil(xmin / st) * st; x <= xmax; x += st) {
+    const [sx] = w2s(x, 0);
+    el("line", { x1: sx, y1: 0, x2: sx, y2: h, stroke: "#16304D" }, gGrid);
+    if (free(sx, h - 17, sx + 50, h)) el("text", { x: sx + 3, y: h - 5, fill: "#64748B", "font-size": 10.5 }, gGrid).textContent = `${x} m`;
+  }
+  for (let y = Math.ceil(ymin / st) * st; y <= ymax; y += st) {
+    const [, sy] = w2s(0, y);
+    el("line", { x1: 0, y1: sy, x2: w, y2: sy, stroke: "#16304D" }, gGrid);
+    if (sy > 14 && sy < h - 20 && free(0, sy - 15, 54, sy)) el("text", { x: 4, y: sy - 3, fill: "#64748B", "font-size": 10.5 }, gGrid).textContent = `${y} m`;
+  }
+}
+function drawTrack() {
+  gTrack.innerHTML = "";
+  const [ax, ay] = w2s(...rt.A), [bx, by] = w2s(...rt.B);
+  el("line", { x1: ax, y1: ay, x2: bx, y2: by, stroke: "#2DD4BF", "stroke-width": 2, "stroke-dasharray": "8 6", "stroke-opacity": .8 }, gTrack);
+  const fl = 14 / Math.max(view.s, 1e-6) + 6;
+  const [f1x, f1y] = w2s(rt.B[0] - nHat[0] * fl, rt.B[1] - nHat[1] * fl), [f2x, f2y] = w2s(rt.B[0] + nHat[0] * fl, rt.B[1] + nHat[1] * fl);
+  el("line", { x1: f1x, y1: f1y, x2: f2x, y2: f2y, stroke: "#22C55E", "stroke-width": 1.5, "stroke-opacity": .7 }, gTrack);
+  if (D.ghost) {                                                       // aynı senaryoda otopilotun yolu
+    let d = ""; for (let i = 0; i < D.ghost.x.length; i++) { const [x, y] = w2s(D.ghost.x[i], D.ghost.y[i]); d += (i ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1); }
+    el("path", { d, fill: "none", stroke: "#A78BFA", "stroke-opacity": .45, "stroke-width": 2, "stroke-dasharray": "2 4" }, gTrack);
+  }
+  for (const [p, c, t] of [[[ax, ay], "#0F172A", "A"], [[bx, by], "#16A34A", "B"]]) {
+    el("circle", { cx: p[0], cy: p[1], r: 9, fill: c, stroke: "#E2E8F0", "stroke-width": 1.5 }, gTrack);
+    el("text", { x: p[0], y: p[1] + 4, fill: "#fff", "font-size": 11, "font-weight": 700, "text-anchor": "middle" }, gTrack).textContent = t;
+  }
+  const [sx, sy] = w2s(rt.st0[0], rt.st0[1]);
+  el("circle", { cx: sx, cy: sy, r: 4, fill: "#EF4444" }, gTrack);
+}
+function drawPath() {
+  gPath.innerHTML = "";
+  const R = S.R, n = R.x.length, parts = ["", "", ""];
+  let prevC = -1, px = 0, py = 0;
+  for (let i = 0; i < n; i++) {
+    const [x, y] = w2s(R.x[i], R.y[i]);
+    if (i > 0) { const c = cls(R.e[i]); parts[c] += (c === prevC ? "" : "M" + px.toFixed(1) + " " + py.toFixed(1)) + "L" + x.toFixed(1) + " " + y.toFixed(1); prevC = c; }
+    px = x; py = y;
+  }
+  parts.forEach((d, k) => d && el("path", { d, fill: "none", stroke: CLR[k], "stroke-width": 3, "stroke-linecap": "round", "stroke-linejoin": "round" }, gPath));
+}
+function arrowHead(g, x0, y0, x1, y1, color, size) {
+  const a = Math.atan2(y1 - y0, x1 - x0), s = size;
+  el("path", { d: `M${x1} ${y1} L${x1 - s * Math.cos(a - .45)} ${y1 - s * Math.sin(a - .45)} L${x1 - s * Math.cos(a + .45)} ${y1 - s * Math.sin(a + .45)} Z`, fill: color }, g);
+}
+function drawOverlay() {
+  gOver.innerHTML = "";
+  const [x, y, h, u, v] = S.st, [bx, by] = w2s(x, y), V = Math.hypot(u, v), lam = V > 1e-3 ? Math.atan2(v, u) / d2r : 0;
+  if (S.apOn && S.a) {                                                 // otopilot hedef pruvası ψ*
+    const ps = cu(S.a.psi_star), L1 = 58;
+    el("line", { x1: bx, y1: by, x2: bx + ps[0] * L1, y2: by - ps[1] * L1, stroke: "#A78BFA", "stroke-width": 2, "stroke-dasharray": "5 4" }, gOver);
+    arrowHead(gOver, bx, by, bx + ps[0] * L1, by - ps[1] * L1, "#A78BFA", 8);
+  }
+  const e = eNow();
+  if (Math.abs(e) > 0.3) {
+    const [sx, sy] = w2s(x - nHat[0] * e, y - nHat[1] * e);
+    el("line", { x1: bx, y1: by, x2: sx, y2: sy, stroke: "#EF4444", "stroke-width": 1.5, "stroke-dasharray": "3 3" }, gOver);
+  }
+  if (V > 0.05) {
+    const cg = cu(h + lam), L2 = 40;
+    el("line", { x1: bx, y1: by, x2: bx + cg[0] * L2, y2: by - cg[1] * L2, stroke: "#22D3EE", "stroke-width": 2.5 }, gOver);
+    arrowHead(gOver, bx, by, bx + cg[0] * L2, by - cg[1] * L2, "#22D3EE", 8);
+  }
+  const Lp = Math.max(30, M.boat.L * view.s), k = Lp / M.boat.L;
+  const g = el("g", { transform: `translate(${bx},${by}) rotate(${h})` }, gOver);
+  const sep = M.boat.sep * k / 2, hw = Math.max(2.5, 0.09 * k);
+  for (const [sx, c, ed] of [[-sep, "#FF7F0E", "#FDBA74"], [sep, "#111111", "#CBD5E1"]])
+    el("rect", { x: sx - hw, y: -Lp / 2, width: 2 * hw, height: Lp, rx: hw, fill: c, stroke: ed, "stroke-width": 1 }, g);
+  for (const yb of [-0.17 * Lp, 0.25 * Lp]) el("line", { x1: -sep, y1: yb, x2: sep, y2: yb, stroke: "#94A3B8", "stroke-width": 2 }, g);
+  const dr = S.dr * d2r, rl = 0.16 * Lp;
+  el("line", { x1: 0, y1: 0.25 * Lp, x2: 0, y2: Lp / 2, stroke: "#94A3B8", "stroke-width": 1.5 }, g);
+  el("line", { x1: 0, y1: Lp / 2, x2: Math.sin(dr) * rl, y2: Lp / 2 + Math.cos(dr) * rl, stroke: "#60A5FA", "stroke-width": 3, "stroke-linecap": "round" }, g);
+  const ds = S.b.delta_s * d2r, my = -M.boat.x_mast * k, sl = M.boat.boom * k;
+  el("line", { x1: 0, y1: my, x2: Math.sin(ds) * sl, y2: my + Math.cos(ds) * sl, stroke: S.b.sf.flapping || S.b.sf.streaming ? "#F87171" : "#F8FAFC",
+               "stroke-width": 3, "stroke-linecap": "round" }, g);
+  el("circle", { cx: 0, cy: my, r: 3, fill: "#0F172A", stroke: "#F8FAFC", "stroke-width": 1.5 }, g);
+}
+
+// ---------------- Panel ----------------
+function ctl(id, val, lo, hi, color, mark) {
+  const tr = $(id), f = Math.max(-1, Math.min(1, val / hi)) * 50;
+  tr.innerHTML = `<div class="fill" style="${f >= 0 ? `left:50%;width:${f}%` : `left:${50 + f}%;width:${-f}%`};background:${color}"></div>` +
+    (mark === undefined ? "" : `<div class="mk" style="left:calc(${50 + Math.max(-1, Math.min(1, mark / hi)) * 50}% - 1px)"></div>`);
+}
+function drawPanel() {
+  const [, , h, u, v, r] = S.st, b = S.b, V = Math.hypot(u, v), lam = V > 1e-3 ? Math.atan2(v, u) / d2r : 0, e = eNow();
+  ctl("trR", S.dr, -ap.rud_max, ap.rud_max, "#EF4444", S.cmd);
+  $("vR").textContent = f1(S.dr) + "°";
+  ctl("trT", S.rtrim, -ap.rud_max, ap.rud_max, "#60A5FA");
+  $("vT").textContent = f1(S.rtrim) + "°";
+  ctl("trS", b.delta_s, -90, 90, "#F8FAFC");
+  $("vS").textContent = f1(b.delta_s) + "°";
+  $("mode").innerHTML = S.apOn ? `<span style="color:#A78BFA">Otopilot · ψ* ${deg(S.a ? S.a.psi_star : h).toFixed(0)}°</span>` :
+    `<span style="color:#22D3EE">Manuel</span> · yelken ${env.trim === "man" ? "elle" : "otomatik"}`;
+  const twa = SIM.wrap180(h - SIM.WIND_FROM_DEG);
+  $("twa").textContent = `TWA ${Math.abs(twa).toFixed(0)}°${M.lim !== null && Math.abs(twa) < M.lim ? " · ölü açı!" : ""}`;
+  $("twa").style.color = M.lim !== null && Math.abs(twa) < M.lim ? "#EF4444" : "";
+  const G = [["Zaman", `${S.t.toFixed(1)}<small>s</small>`], ["Hız V", `${(V / KT).toFixed(2)}<small>kt</small>`],
+    ["Sapma e", `<span style="color:${CLR[cls(e)]}">${f1(e)}</span><small>m</small>`],
+    ["Pruva ψ", deg(h).toFixed(1) + "°"], ["Gidiş COG", deg(h + lam).toFixed(1) + "°"], ["Yan kayma λ", f1(lam) + "°"],
+    ["Dönüş hızı r", f1(r / d2r) + "<small>°/s</small>"], ["Görünür rüzgar", `${(b.sf.aaw / KT).toFixed(1)}<small>kt</small>`],
+    ["Yelken itişi Fx", f1(b.Fx) + "<small>N</small>"], ["Dümen kuvveti", f1(b.Y_r) + "<small>N</small>"],
+    ["Kalan", `${Math.max(0, rt.L - sNow()).toFixed(0)}<small>m</small>`], ["Hücum α", b.sf.alpha.toFixed(0) + "°"]];
+  $("gauges").innerHTML = G.map(([l, v]) => `<div class="g"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("");
+  const rem = Math.max(0, rt.L - sNow());
+  $("info").innerHTML = `${S.apOn ? '<b style="color:#A78BFA">OTOPİLOT</b>' : '<b style="color:#22D3EE">MANUEL</b>'} · ` +
+    `Rota <b>${rt.chi.toFixed(0)}°</b> · kalan <b>${rem.toFixed(0)} m</b> · <span style="color:#F87171">e = ${f1(e)} m</span>`;
+  // kumanda durumu ve çubuklar
+  const pc = $("pad");
+  if (padName) { pc.textContent = "🎮 Kumanda bağlı"; pc.title = padName; pc.style.color = pc.style.borderColor = "#22C55E"; pc.style.background = "#22C55E1A"; }
+  else { pc.textContent = "🎮 Kumanda yok · klavye"; pc.title = "Kumandayı bağla ve bir tuşuna bas"; pc.style.color = pc.style.borderColor = "#F59E0B"; pc.style.background = "#F59E0B1A"; }
+  const sv = $("sticks"); sv.innerHTML = "";
+  [[26, inp.lx, "Dümen"], [86, inp.rx, "Yelken"]].forEach(([cx, a]) => {
+    el("circle", { cx, cy: 22, r: 18, fill: "#0F172A", stroke: "#475569" }, sv);
+    el("circle", { cx: cx + a * 12, cy: 22, r: 6, fill: a ? "#22D3EE" : "#64748B" }, sv);
+  });
+  el("text", { x: 26, y: 50, fill: "#94A3B8", "font-size": 9.5, "text-anchor": "middle" }, sv).textContent = "dümen";
+  el("text", { x: 86, y: 50, fill: "#94A3B8", "font-size": 9.5, "text-anchor": "middle" }, sv).textContent = "yelken";
+  $("padT").innerHTML = padName ? padName.replace(/\s*\(.*$/, "").slice(0, 60) +
+    (padStd ? "" : '<br><span style="color:#F59E0B">Standart olmayan eşleme: tuşlar farklı olabilir.</span>') :
+    "Kumandayı USB/Bluetooth ile bağlayıp <b>bir tuşuna bas</b>. Klavyeyle sürmek için önce bu alana bir kez tıkla.";
+  const E = S.R.e.map(Math.abs);
+  $("sum").innerHTML = `Kayıt: <b>${S.R.t.length}</b> satır (0.25 s) · ortalama |e| <b>${(E.reduce((a, b) => a + b, 0) / Math.max(1, E.length)).toFixed(2)} m</b>` +
+    ` · en büyük |e| <b>${Math.max(0, ...E).toFixed(1)} m</b>` + (S.reached !== null ? ` · <span style="color:#22C55E">B hizasına varış <b>${S.reached.toFixed(1)} s</b></span>` : "") +
+    (D.ghost ? ` · <span style="color:#A78BFA">mor noktalı çizgi: aynı senaryoda otopilotun yolu${D.ghost.t_end ? ` (${D.ghost.t_end.toFixed(0)} s)` : ""}</span>` : "");
+}
+
+// ---------------- Kayan grafikler (son 60 s) ----------------
+const CH = [
+  { t: "Sapma e (m)", s: [["e", "#22D3EE"]], zero: true },
+  { t: "Dümen δr (°) · komut / gerçek", s: [["cmd", "#64748B"], ["dr", "#EF4444"]], zero: true },
+  { t: "Hız V (kt)", s: [["Vkt", "#22C55E"]] },
+  { t: "Yelken δs (°)", s: [["ds", "#F8FAFC"]], zero: true },
+];
+const charts = CH.map(c => { const box = document.createElement("div"); box.className = "chart"; $("charts").appendChild(box); return { c, svg: el("svg", {}, box) }; });
+function drawCharts() {
+  const R = S.R, n = R.t.length, T1 = Math.max(WIN, n ? R.t[n - 1] : 0), T0 = T1 - WIN;
+  let i0 = 0; while (i0 < n - 1 && R.t[i0] < T0) i0++;
+  for (const { c, svg } of charts) {
+    svg.innerHTML = "";
+    const w = svg.clientWidth, h = svg.clientHeight, PL = 38, PR = 6, PT = 20, PB = 15;
+    const ser = c.s.map(([k]) => (k === "Vkt" ? R.V.slice(i0).map(v => v / KT) : R[k].slice(i0)));
+    let lo = Math.min(...ser.flat()), hi = Math.max(...ser.flat());
+    if (c.zero) { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
+    if (!isFinite(lo) || hi - lo < 1e-6) { lo = (isFinite(lo) ? lo : 0) - 1; hi = (isFinite(hi) ? hi : 0) + 1; }
+    const pad = (hi - lo) * .08; lo -= pad; hi += pad;
+    const X = t => PL + (w - PL - PR) * (t - T0) / WIN, Y = v => PT + (h - PT - PB) * (1 - (v - lo) / (hi - lo));
+    el("text", { x: 8, y: 14, fill: "#94A3B8", "font-size": 11, "font-weight": 700 }, svg).textContent = c.t;
+    for (const v of [hi - pad, lo + pad]) {
+      el("line", { x1: PL, y1: Y(v), x2: w - PR, y2: Y(v), stroke: "#1E3A5F" }, svg);
+      el("text", { x: PL - 4, y: Y(v) + 3.5, fill: "#64748B", "font-size": 10, "text-anchor": "end" }, svg).textContent = v.toFixed(Math.abs(hi - lo) < 10 ? 1 : 0);
+    }
+    if (c.zero && lo < 0 && hi > 0) el("line", { x1: PL, y1: Y(0), x2: w - PR, y2: Y(0), stroke: "#475569", "stroke-dasharray": "3 3" }, svg);
+    for (const [tt, an] of [[T0, "start"], [T1, "end"]]) el("text", { x: X(tt), y: h - 3, fill: "#64748B", "font-size": 10, "text-anchor": an }, svg).textContent = tt.toFixed(0) + " s";
+    ser.forEach((arr, k) => {
+      let d = ""; for (let i = 0; i < arr.length; i++) d += (i ? "L" : "M") + X(R.t[i0 + i]).toFixed(1) + " " + Y(arr[i]).toFixed(1);
+      el("path", { d, fill: "none", stroke: c.s[k][1], "stroke-width": k === ser.length - 1 ? 1.8 : 1.4 }, svg);
+    });
+  }
+}
+
+// ---------------- Çizim ----------------
+let lastDraw = 0, lastN = -1;
+function draw(force) {
+  const now = performance.now();
+  if (!force && now - lastDraw < 33) return;                         // ~30 fps yeterli
+  lastDraw = now;
+  if (W() < 20 || H() < 20) { drawPanel(); return; }                  // harita henüz yerleşmedi
+  const grew = S.R.t.length !== lastN;
+  if (!view || (!follow && (force || grew))) fitAll();                // tüm rota: tekne çerçevede kalsın
+  if (follow) { if (!followS) followS = Math.max(view.s, Math.min(W(), H()) / 70); view = { cx: S.st[0], cy: S.st[1], s: followS }; }
+  drawGrid(); drawTrack(); drawPath(); drawOverlay(); drawPanel();
+  if (force || grew) { drawCharts(); lastN = S.R.t.length; }
+}
+function zoom(f) { if (!view) return; view.s *= f; if (follow) followS = view.s; draw(true); }
+map.addEventListener("wheel", ev => { if (!ev.ctrlKey) return; ev.preventDefault(); zoom(ev.deltaY < 0 ? 1.15 : 1 / 1.15); }, { passive: false });
+const focusApp = () => $("app").focus({ preventScroll: true });
+map.addEventListener("pointerdown", focusApp);
+
+// ---------------- CSV ----------------
+const CSV_COLS = [["t", "Zaman t (s)"], ["x", "Konum x Doğu (m)"], ["y", "Konum y Kuzey (m)"], ["mode", "Dümen kontrolü"],
+  ["trim", "Yelken trimi"], ["h", "Pruva ψ (°)"], ["psi_star", "Otopilot hedef pruva ψ* (°)"], ["e", "Sapma e (m)"],
+  ["s", "Rota boyunca s (m)"], ["V", "Hız V (m/s)"], ["u", "İleri hız u (m/s)"], ["v", "Yanal hız v (m/s)"],
+  ["r", "Dönüş hızı r (°/s)"], ["lam", "Yan kayma λ (°)"], ["cog", "Gidiş yönü COG (°)"], ["twa", "Gerçek rüzgar açısı TWA (°)"],
+  ["beta", "Görünür rüzgar açısı β (°)"], ["aaw", "Görünür rüzgar hızı (m/s)"], ["ds", "Yelken açısı δs (°)"],
+  ["cmd", "Dümen komutu (°)"], ["dr", "Dümen açısı δr (°)"], ["Fx", "Yelken ileri kuvvet Fx (N)"], ["Fy", "Yelken yanal kuvvet Fy (N)"],
+  ["X_r", "Dümen boyuna kuvvet (N)"], ["Y_r", "Dümen yanal kuvvet (N)"], ["Y_h", "Gövde yanal kuvvet (N)"], ["R", "Su direnci R (N)"],
+  ["N_s", "Yelken momenti (N·m)"], ["N_r", "Dümen momenti (N·m)"]];
+function csv(tr) {
+  const sep = tr ? ";" : ",", num = v => (typeof v === "number" ? (isFinite(v) ? (tr ? v.toFixed(4).replace(".", ",") : v.toFixed(4)) : "") : v);
+  const lines = [CSV_COLS.map(c => c[1]).join(sep)];
+  for (let i = 0; i < S.R.t.length; i++) lines.push(CSV_COLS.map(([k]) => num(S.R[k][i])).join(sep));
+  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = tr ? "kumanda_surusu_excel.csv" : "kumanda_surusu.csv"; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+$("bCsvTr").onclick = () => csv(true);
+$("bCsv").onclick = () => csv(false);
+
+// ---------------- Başlangıç ----------------
+$("bRun").onclick = () => { toggleRun(); focusApp(); };
+$("bReset").onclick = () => { reset(); focusApp(); };
+$("bAP").onclick = () => { setAP(!S.apOn); focusApp(); };
+$("bIn").onclick = () => { zoom(1.25); focusApp(); };
+$("bOut").onclick = () => { zoom(0.8); focusApp(); };
+$("kSail").textContent = SHEET ? "yelken: sağ kaçır, sol topla (elle trime geçer)" : "yelken açısı (elle trime geçer)";
+$("bTrim").onclick = () => { toggleTrim(); focusApp(); };
+$("wind").innerHTML = `<svg width="54" height="24" viewBox="0 0 54 24">${[9, 27, 45].map(x => `<line x1="${x}" y1="1" x2="${x}" y2="17" stroke="#60A5FA" stroke-width="2"/><path d="M${x - 5} 14 L${x} 22 L${x + 5} 14 Z" fill="#60A5FA"/>`).join("")}</svg><br>Rüzgar ${M.tws_kt.toFixed(0)} kt · ${(M.tws_kt * KT).toFixed(1)} m/s`;
+addEventListener("gamepadconnected", () => draw(true));
+addEventListener("gamepaddisconnected", () => draw(true));
+reset();
+new ResizeObserver(() => { if (!follow) fitAll(); draw(true); }).observe(document.body);
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
