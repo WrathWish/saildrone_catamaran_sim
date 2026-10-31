@@ -6,6 +6,8 @@ const SIM = (() => {
   const KT2MS = 0.514444, RHO_AIR = 1.225, RHO_WATER = 1025.0, NU_WATER = 1.19e-6;
   const WIND_FROM_DEG = 0.0, PSI_WIND_TOWARD_DEG = 180.0;
   const D2R = Math.PI / 180.0, R2D = 180.0 / Math.PI;
+  const REV_A = [0, 5, 10, 15, 20, 25, 90];                         // ters akış ΔCD (Sheldahl & Klimas 1981, Tablo 2)
+  const REV_DCD = [0.0171, 0.0437, 0.1216, 0.0400, 0.0230, 0.0, 0.0];
   const SOFT_A = [8, 15, 22, 30, 45, 60, 90];
   const SOFT_CL = [0.00, 1.15, 1.40, 1.30, 1.00, 0.65, 0.0];
   const SOFT_CD = [0.10, 0.15, 0.25, 0.40, 0.75, 1.00, 1.25];
@@ -47,7 +49,11 @@ const SIM = (() => {
       const CL_att = CLa * ar, CD_att = CD0 + CL_att ** 2 / (Math.PI * 0.9 * p.AR_wing);
       const CL_sep = p.CN_plate * Math.sin(ar) * Math.cos(ar), CD_sep = CD0 + p.CN_plate * Math.sin(ar) ** 2;
       const t = smoothstep((a_e - p.alpha_stall) / 6.0);
-      return [sgn * ((1 - t) * CL_att + t * CL_sep), (1 - t) * CD_att + t * CD_sep, false, 0.25 + 0.25 * t];
+      const CL = (1 - t) * CL_att + t * CL_sep;
+      let CD = (1 - t) * CD_att + t * CD_sep;
+      if (sgn > 0) return [CL, CD, false, 0.25 + 0.25 * t];
+      CD += interp(a_e, REV_A, REV_DCD);                                // ters akış: firar kenarı önde
+      return [-CL, CD, false, 0.75 - 0.25 * t];
     }
     if (a_e < p.alpha_luff) return [0.0, 0.10, true, 0.25];
     return [sgn * interp(a_e, SOFT_A, SOFT_CL), interp(a_e, SOFT_A, SOFT_CD), false, 0.25];

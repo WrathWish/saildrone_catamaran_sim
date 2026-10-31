@@ -587,7 +587,10 @@ map.addEventListener("pointermove", ev => {
 map.addEventListener("pointerup", () => { drag = null; map.classList.remove("drag"); });
 
 // ---------------- Başlangıç ----------------
-const ST = { reached: ["#22C55E", `B'ye ulaştı · ${M.t_end.toFixed(1)} s`], stalled: ["#EF4444", "Tekne durdu (yol alamıyor)"],
+const E_END = Math.abs(D.e[N - 1]), TOL = M.arrive_tol ?? 5;           // varış: B hizası rotaya TOL m'den yakın geçildiyse
+const ST = { reached: E_END <= TOL ? ["#22C55E", `B'ye ulaştı · ${M.t_end.toFixed(1)} s`]
+                                   : ["#F59E0B", `B hizası geçildi · ${M.t_end.toFixed(1)} s · B'ye ${E_END.toFixed(0)} m`],
+             stalled: ["#EF4444", "Tekne durdu (yol alamıyor)"],
              nogo: ["#EF4444", "Rota ölü açıda: doğrudan gidilemez (tramola yok)"], time: ["#F59E0B", `Süre doldu (${M.t_max.toFixed(0)} s)`] };
 const [sc, stx] = ST[M.status]; const sEl = $("status");
 sEl.textContent = stx; sEl.style.color = sc; sEl.style.borderColor = sc; sEl.style.background = sc + "1A";
