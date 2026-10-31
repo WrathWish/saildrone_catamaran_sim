@@ -61,7 +61,31 @@ button.big { font-weight:700; min-width:118px; }
 .foot { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .foot .sum { color:var(--muted); font-size:12.5px; font-variant-numeric:tabular-nums; }
 .foot .sum b { color:var(--txt); }
-@media (max-width: 1100px) {
+.bar { gap:6px; }
+.bar > button { padding:5px 9px; }
+@media (max-width: 1080px) { .bar .lbl { display:none; } }
+.seg { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+.seg button { border:none; border-radius:0; padding:5px 9px; background:var(--panel); font-variant-numeric:tabular-nums; }
+.seg button + button { border-left:1px solid var(--line); }
+.seg button.on { background:#0E2A3A; color:var(--glow); font-weight:700; }
+details.keyscard summary { list-style:none; cursor:pointer; }
+details.keyscard summary::-webkit-details-marker { display:none; }
+details.keyscard summary h4 span:first-child::before { content:"▾ "; }
+details.keyscard:not([open]) summary h4 { margin:0; }
+details.keyscard:not([open]) summary h4 span:first-child::before { content:"▸ "; }
+.chart { position:relative; }
+.chart.empty::after { content:"▶ Başlatınca dolacak"; position:absolute; inset:18px 0 0 0; display:flex;
+                      align-items:center; justify-content:center; color:#475569; font-size:12px; pointer-events:none; }
+/* Geniş pencere: her şey pencere yüksekliğine sığar */
+@media (min-width: 820px) {
+  html, body { height:100%; overflow:hidden; }
+  #app { height:100%; }
+  .main { flex:1; min-height:0; }
+  .mapwrap { min-height:0; }
+  .side { overflow-y:auto; scrollbar-width:thin; }
+  .bar, .charts, .foot { flex:none; }
+}
+@media (max-width: 819px) {
   .main { flex-direction:column; }
   .mapwrap { flex:none; height:440px; min-height:0; }
   .side { width:auto; flex:none; display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); }
@@ -75,14 +99,14 @@ button.big { font-weight:700; min-width:118px; }
   <div class="bar">
     <button id="bRun" class="big">▶ Başlat</button>
     <button id="bReset">⟲ Baştan</button>
-    <select id="spd" title="Benzetim hızı (gerçek zamana göre)">
-      <option value="0.25">×0.25 yavaş</option><option value="0.5">×0.5 yavaş</option>
-      <option value="1" selected>×1 gerçek zaman</option><option value="2">×2</option><option value="4">×4</option>
-    </select>
+    <span class="seg" id="spdSeg" title="Benzetim hızı (gerçek zamana göre). ×1 = gerçek zaman">
+      <button data-v="0.25">×¼</button><button data-v="0.5">×½</button><button data-v="1" class="on">×1</button><button data-v="2">×2</button><button data-v="4">×4</button>
+    </span>
+    <input type="hidden" id="spd" value="1">
     <button id="bAP" class="ap" title="X / P: otopilot (kaskad PID) dümeni devralır">🤖 Otopilot: kapalı</button>
     <button id="bTrim" title="A / T: otomatik yelken trimi">⛵ Oto trim</button>
-    <button id="bFollow" class="on" title="Y / F">🎯 Takip</button>
-    <button id="bAll" title="Y / F">🗺 Tüm rota</button>
+    <button id="bFollow" class="on" title="Y / F: tekneyi takip et">🎯<span class="lbl"> Takip</span></button>
+    <button id="bAll" title="Y / F: tüm rotayı göster">🗺<span class="lbl"> Tüm rota</span></button>
     <button id="bIn" title="Yakınlaştır (D-pad ↑ · +)">+</button>
     <button id="bOut" title="Uzaklaştır (D-pad ↓ · −)">−</button>
     <span class="sp"></span>
@@ -107,8 +131,8 @@ button.big { font-weight:700; min-width:118px; }
         <h4><span>Göstergeler</span><span id="twa"></span></h4>
         <div class="gauges" id="gauges"></div>
       </div>
-      <div class="card">
-        <h4><span>Tuşlar</span><span>kumanda · klavye</span></h4>
+      <details class="card keyscard" open>
+        <summary><h4><span>Tuşlar</span><span>kumanda · klavye</span></h4></summary>
         <div class="keys">
           <b>Sol çubuk ←→ · ← →</b><span>dümen (bırakınca trime döner)</span>
           <b>LB / RB · , .</b><span>dümen trimi −1° / +1°</span>
@@ -120,7 +144,7 @@ button.big { font-weight:700; min-width:118px; }
           <b>Y (△) · F</b><span>takip / tüm rota</span>
           <b>D-pad ↑↓ · + −</b><span>yakınlaştır / uzaklaştır</span>
         </div>
-      </div>
+      </details>
     </div>
   </div>
   <div class="charts" id="charts"></div>
@@ -148,6 +172,29 @@ const env = D.env, rt = D.rt, ap = D.ap, M = D.meta, DT = 0.025, WIN = 60;
 const AUTO_TRIM = env.trim === "man" ? "opt" : env.trim;          // A tuşunun açacağı otomatik yöntem
 const TRIM0 = env.trim, MANUAL0 = env.trim_manual, SHEET = env.sail === "soft" && !env.p.boom_rigid;
 const tHat = rt.t_hat, nHat = rt.n_hat;
+// GHOST-BEGIN · Otopilot hayalet yolu tarayıcıda: Python simulate_route ile aynı adım sırası, kayıt aralığı
+// (10 adım = 0.25 s) ve durma koşulları (B hizası / 30 s durma / ölü açıda |e| > |e0| + 40 m / t_max).
+function ghostRun(rt, ap, env0, e0, DT) {
+  const L = rt.L, tmax = Math.min(1200.0, 60.0 + 3.0 * (L + Math.abs(e0)) / Math.max(rt.V_ref, 0.3));
+  const cs = { I_e: 0.0, I_h: 0.0 }, gx = [], gy = [], gt = [], D2R = Math.PI / 180;
+  let st = rt.st0.slice(), dr = 0.0, slow = 0.0, status = "time";
+  const n = Math.round(tmax / DT);
+  for (let k = 0; k <= n; k++) {
+    const a = SIM.autopilot(st, rt, ap, cs, DT);
+    dr = SIM.servo(dr, a.cmd, ap.rud_rate, DT);
+    const [k1] = SIM.deriv(st, dr * D2R, env0);
+    if (k % 10 === 0) { gt.push(k * DT); gx.push(st[0]); gy.push(st[1]); }
+    const s = (st[0] - rt.A[0]) * rt.t_hat[0] + (st[1] - rt.A[1]) * rt.t_hat[1];
+    if (s >= L) { status = "reached"; break; }
+    slow = a.V < 0.05 ? slow + DT : 0.0;
+    if (slow > 30.0) { status = "stalled"; break; }
+    if (rt.track_nogo && Math.abs(a.e) > Math.abs(e0) + 40.0) { status = "nogo"; break; }
+    st = SIM.rk4(st, dr * D2R, env0, DT, k1);
+  }
+  return { x: gx, y: gy, t_end: status === "reached" ? gt[gt.length - 1] : null, status, t_last: gt[gt.length - 1] };
+}
+// GHOST-END
+if (D.ghost === null) D.ghost = ghostRun(rt, ap, Object.assign({}, env), D.e0, DT);   // sürüşteki trim değişikliklerinden bağımsız
 
 // ---------------- Benzetim durumu ----------------
 let S;
@@ -390,11 +437,28 @@ function drawOverlay() {
   el("line", { x1: 0, y1: 0.25 * Lp, x2: 0, y2: Lp / 2, stroke: "#94A3B8", "stroke-width": 1.5 }, g);
   el("line", { x1: 0, y1: Lp / 2, x2: Math.sin(dr) * rl, y2: Lp / 2 + Math.cos(dr) * rl, stroke: "#60A5FA", "stroke-width": 3, "stroke-linecap": "round" }, g);
   const ds = S.b.delta_s * d2r, my = -M.boat.x_mast * k, sl = M.boat.boom * k;
-  el("line", { x1: 0, y1: my, x2: Math.sin(ds) * sl, y2: my + Math.cos(ds) * sl, stroke: S.b.sf.flapping || S.b.sf.streaming ? "#F87171" : "#F8FAFC",
-               "stroke-width": 3, "stroke-linecap": "round" }, g);
+  const sc = S.b.sf.flapping || S.b.sf.streaming ? "#F87171" : "#F8FAFC";
+  if (M.sail === "wing")
+    el("path", { d: wingPath(ds, my, M.boat.chord * k), fill: sc, "fill-opacity": .85, stroke: sc, "stroke-width": 1.5,
+                 "stroke-linejoin": "round" }, g);
+  else
+    el("line", { x1: 0, y1: my, x2: Math.sin(ds) * sl, y2: my + Math.cos(ds) * sl, stroke: sc,
+                 "stroke-width": 3, "stroke-linecap": "round" }, g);
   el("circle", { cx: 0, cy: my, r: 3, fill: "#0F172A", stroke: "#F8FAFC", "stroke-width": 1.5 }, g);
 }
 
+// Sert kanat çizimi: kokpitteki naca_polygon ile aynı NACA 0012 dış hattı; direk kordun 1/4'ünde (pivot).
+// Eskiden yalnız direkten geriye kısa bir çizgi çiziliyordu (0.75·kord), dönüşü zor görünüyordu. Yalnız görünüm.
+function wingPath(ds, my, ch) {
+  const c = [Math.sin(ds), Math.cos(ds)], nr = [-c[1], c[0]], N = 24, up = [], lo = [];
+  for (let j = 0; j < N; j++) {
+    const xc = 0.5 * (1 - Math.cos(Math.PI * j / (N - 1)));
+    const yt = 5 * 0.12 * ch * (0.2969 * Math.sqrt(xc) - 0.1260 * xc - 0.3516 * xc ** 2 + 0.2843 * xc ** 3 - 0.1015 * xc ** 4);
+    const px = (xc - 0.25) * ch * c[0], py = my + (xc - 0.25) * ch * c[1];
+    up.push([px + yt * nr[0], py + yt * nr[1]]); lo.push([px - yt * nr[0], py - yt * nr[1]]);
+  }
+  return "M" + up.concat(lo.reverse()).map(q => q[0].toFixed(1) + " " + q[1].toFixed(1)).join("L") + "Z";
+}
 // ---------------- Panel ----------------
 function ctl(id, val, lo, hi, color, mark) {
   const tr = $(id), f = Math.max(-1, Math.min(1, val / hi)) * 50;
@@ -451,11 +515,17 @@ const CH = [
   { t: "Hız V (kt)", s: [["Vkt", "#22C55E"]] },
   { t: "Yelken δs (°)", s: [["ds", "#F8FAFC"]], zero: true },
 ];
-const charts = CH.map(c => { const box = document.createElement("div"); box.className = "chart"; $("charts").appendChild(box); return { c, svg: el("svg", {}, box) }; });
+const charts = CH.map(c => { const box = document.createElement("div"); box.className = "chart"; $("charts").appendChild(box); return { c, box, svg: el("svg", {}, box) }; });
+document.querySelectorAll("#spdSeg button").forEach(b => b.onclick = () => {
+  $("spd").value = b.dataset.v;
+  document.querySelectorAll("#spdSeg button").forEach(x => x.classList.toggle("on", x === b));
+  if (typeof focusApp === "function") focusApp();
+});
 function drawCharts() {
   const R = S.R, n = R.t.length, T1 = Math.max(WIN, n ? R.t[n - 1] : 0), T0 = T1 - WIN;
   let i0 = 0; while (i0 < n - 1 && R.t[i0] < T0) i0++;
-  for (const { c, svg } of charts) {
+  for (const { c, box, svg } of charts) {
+    box.classList.toggle("empty", n === 0);
     svg.innerHTML = "";
     const w = svg.clientWidth, h = svg.clientHeight, PL = 38, PR = 6, PT = 20, PB = 15;
     const ser = c.s.map(([k]) => (k === "Vkt" ? R.V.slice(i0).map(v => v / KT) : R[k].slice(i0)));

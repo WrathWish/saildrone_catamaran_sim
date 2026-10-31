@@ -12,14 +12,18 @@ html, body { margin:0; background:var(--bg); color:var(--txt); font-size:13px;
              font-family:"Source Sans Pro","Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif; }
 #app { display:flex; flex-direction:column; gap:8px; padding:2px 2px 6px; }
 .bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-height:32px; }
+.bar .gap { width:6px; flex:none; }
 button, select { background:var(--panel); color:var(--txt); border:1px solid var(--line); border-radius:8px;
                  padding:5px 11px; font:inherit; cursor:pointer; white-space:nowrap; }
 button:hover, select:hover { border-color:#475569; }
 button.on { border-color:var(--glow); color:var(--glow); background:#0E2A3A; }
+button.big { font-weight:700; min-width:104px; }
 .hint { color:var(--muted); font-size:12px; }
 .status { margin-left:auto; padding:3px 10px; border-radius:999px; border:1px solid; font-size:12px; white-space:nowrap; }
+.bar input[type=range] { flex:1; min-width:120px; accent-color:var(--glow); }
+.bar .tm { color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; min-width:92px; text-align:right; }
 .main { display:flex; gap:8px; align-items:stretch; }
-.mapwrap { position:relative; flex:1; min-width:0; min-height:500px; border:1px solid var(--line); border-radius:12px;
+.mapwrap { position:relative; flex:1; min-width:0; min-height:420px; border:1px solid var(--line); border-radius:12px;
            overflow:hidden; background:var(--water); }
 #map { position:absolute; inset:0; width:100%; height:100%; display:block; cursor:grab; user-select:none; }
 #map.drag { cursor:grabbing; }
@@ -29,33 +33,53 @@ button.on { border-color:var(--glow); color:var(--glow); background:#0E2A3A; }
 #wind { top:8px; right:8px; text-align:center; color:var(--blue); font-weight:700; font-size:12px; line-height:1.25; }
 #mini { right:8px; bottom:8px; width:180px; height:126px; padding:0; overflow:hidden; }
 #mini .t { position:absolute; left:6px; top:3px; font-size:10.5px; color:var(--muted); }
-.side { width:640px; flex:0 0 640px; display:grid; grid-template-columns:1fr 1fr; gap:8px; align-content:start; }
-.side .col { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.side { width:390px; flex:0 0 390px; display:flex; flex-direction:column; gap:8px; min-width:0; }
 .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:8px 10px; }
 .card h4 { margin:0 0 6px; font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
            display:flex; justify-content:space-between; gap:6px; font-weight:700; }
 .card h4 span:last-child { text-transform:none; letter-spacing:0; font-weight:600; }
+.tabs { display:flex; align-items:center; gap:4px; margin:-2px 0 6px; }
+.tabs .tab { font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; font-weight:700; padding:3px 9px;
+             color:var(--muted); background:transparent; border-color:transparent; }
+.tabs .tab.on { color:var(--txt); background:var(--bg); border-color:var(--line); }
+.tabs .note { margin-left:auto; color:var(--muted); font-size:12px; font-weight:600; white-space:nowrap; }
+.pane[hidden] { display:none; }
+.scards { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.scard { background:var(--bg); border:1px solid var(--line); border-radius:9px; padding:4px 8px; min-width:0; cursor:help; }
+.scard .l { font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); white-space:nowrap;
+            overflow:hidden; text-overflow:ellipsis; }
+.scard .v { font-size:17px; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden;
+            text-overflow:ellipsis; }
+.scard .v small { font-size:11px; color:var(--muted); font-weight:600; margin-left:2px; }
+.scard .v em { font-style:normal; font-size:11px; font-weight:600; color:#FCA5A5; margin-left:6px; }
+.snote { font-size:11.5px; color:#FCA5A5; margin:0 0 6px; }
+.stbl { width:100%; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; margin-top:8px; }
+.stbl th { text-align:right; font-size:11px; padding:3px 4px; border-bottom:1px solid var(--line); white-space:nowrap; }
+.stbl td { text-align:right; padding:3px 4px; border-bottom:1px solid #263449; white-space:nowrap; }
+.stbl th:first-child, .stbl td:first-child { text-align:left; color:var(--muted); font-weight:600; }
+.stbl th i { display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:4px; }
+.sbtn { display:flex; gap:6px; margin-top:8px; }
+.sbtn button { flex:1; font-size:12px; padding:4px 6px; }
+.scap { font-size:11px; color:var(--muted); margin-top:5px; line-height:1.35; }
 .sub { font-size:11px; color:var(--muted); margin:6px 0 2px; letter-spacing:.02em; }
+.sub:first-child { margin-top:0; }
 .pid { display:grid; grid-template-columns:30px 1fr 62px; align-items:center; gap:6px; font-size:12px; height:18px; }
 .pid b { color:var(--purple); font-weight:700; }
 .pid .tr { position:relative; height:8px; background:var(--bg); border-radius:4px; overflow:hidden; }
 .pid .tr::after { content:""; position:absolute; left:50%; top:0; bottom:0; width:1px; background:#64748B; }
 .pid .fill { position:absolute; top:0; bottom:0; }
 .pid .v { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
-.gauges { display:grid; grid-template-columns:1fr 1fr; gap:6px 10px; }
+.gauges { display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; }
 .g { min-width:0; }
 .g .l { font-size:11px; color:var(--muted); letter-spacing:.02em; white-space:nowrap;
         overflow:hidden; text-overflow:ellipsis; }
-.g .v { font-size:16px; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden;
-        text-overflow:ellipsis; }
+.g .v { font-size:15.5px; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden;
+        text-overflow:ellipsis; line-height:1.25; }
 .g .v small { font-size:11px; color:var(--muted); font-weight:600; margin-left:3px; }
-#fsvg { width:100%; height:170px; display:block; }
+#fsvg { width:100%; height:160px; display:block; }
 .leg { display:grid; grid-template-columns:12px 1fr auto; gap:3px 6px; align-items:center; font-size:12px; margin-top:4px; }
 .leg i { width:10px; height:10px; border-radius:2px; display:inline-block; }
 .leg span:last-child { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
-.play { display:flex; align-items:center; gap:8px; }
-.play input[type=range] { flex:1; min-width:80px; accent-color:var(--glow); }
-.play .tm { color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; min-width:92px; text-align:right; }
 .phases { display:flex; gap:4px; align-items:stretch; min-height:28px; }
 .phases .lbl { color:var(--muted); font-size:11px; letter-spacing:.06em; text-transform:uppercase; font-weight:700;
                align-self:center; margin-right:4px; white-space:nowrap; }
@@ -74,11 +98,26 @@ button.on { border-color:var(--glow); color:var(--glow); background:#0E2A3A; }
 .chart .ch-leg span { display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
 .chart .ch-leg i { width:12px; height:3px; border-radius:2px; display:inline-block; }
 .chart svg { flex:1; min-height:0; width:100%; display:block; cursor:pointer; }
-@media (max-width: 1279px) {
+/* Geniş pencere: her şey pencere yüksekliğine sığar (harita kalan alanı doldurur, hiçbir şey taşmaz) */
+@media (min-width: 820px) {
+  html, body { height:100%; overflow:hidden; }
+  #app { height:100%; }
+  .main { flex:1; min-height:0; }
+  .mapwrap { min-height:0; }
+  .side { overflow-y:auto; scrollbar-width:thin; }
+  .bar, .phases, .charts { flex:none; }
+  .chart { height:118px; }
+  .gauges { grid-template-columns:1fr 1fr 1fr; gap:3px 8px; }
+  .g .v { font-size:15px; }
+}
+@media (min-width: 1000px) { .charts { grid-template-columns:repeat(4, 1fr); } }
+/* Kısa pencerede mini harita rotanın üstüne binmesin */
+@media (min-width: 820px) and (max-height: 640px) { #mini { display:none !important; } }
+/* Dar pencere: alt alta (eski düzen), pencere içinde kaydırılır */
+@media (max-width: 819px) {
   .main { flex-direction:column; }
-  .mapwrap { flex:none; height:440px; min-height:0; }
-  .side { width:auto; flex:none; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); }
-  .side .col { display:contents; }
+  .mapwrap { flex:none; height:420px; min-height:0; }
+  .side { width:auto; flex:none; }
 }
 @media (max-width: 760px) { .charts { grid-template-columns:1fr; } }
 @media (max-width: 520px) { #mini { display:none !important; } }
@@ -87,58 +126,135 @@ button.on { border-color:var(--glow); color:var(--glow); background:#0E2A3A; }
 <body>
 <div id="app">
   <div class="bar">
-    <button id="bFollow">🎯 Tekneyi takip et</button>
-    <button id="bAll">🗺 Tüm rota</button>
-    <button id="bIn" title="Yakınlaştır">+</button>
-    <button id="bOut" title="Uzaklaştır">−</button>
-    <span class="hint">Haritayı sürükle: kaydır · Ctrl + tekerlek: yakınlaştır</span>
+    <button id="bPlay" class="big">▶ Oynat</button>
+    <button id="bReset">⟲ Baştan</button>
+    <select id="spd" title="Oynatma hızı">
+      <option value="1">×1</option><option value="2">×2</option><option value="5" selected>×5</option>
+      <option value="10">×10</option><option value="20">×20</option>
+    </select>
+    <input id="slider" type="range" min="0" value="0" step="1" title="Zaman çubuğu: sürükleyerek istediğin ana git">
+    <span id="tm" class="tm"></span>
+    <span class="gap"></span>
+    <button id="bFollow" title="Harita tekneyi izler">🎯 Takip</button>
+    <button id="bAll" title="Tüm rotayı sığdır">🗺 Tüm rota</button>
+    <button id="bIn" title="Yakınlaştır (Ctrl + tekerlek)">+</button>
+    <button id="bOut" title="Uzaklaştır (Ctrl + tekerlek)">−</button>
     <span id="status" class="status"></span>
   </div>
   <div class="main">
-    <div class="mapwrap">
+    <div class="mapwrap" title="Sürükle: kaydır · Ctrl + tekerlek: yakınlaştır">
       <svg id="map"></svg>
       <div id="info" class="ov"></div>
       <div id="wind" class="ov"></div>
       <div id="mini" class="ov"><svg id="msvg" width="180" height="126"></svg><span class="t">Tüm rota</span></div>
     </div>
     <div class="side">
-      <div class="col">
-        <div class="card">
-          <h4><span>Kaskad PID</span><span id="gain"></span></h4>
+      <div class="card">
+        <h4><span>Göstergeler</span><span id="twa"></span></h4>
+        <div class="gauges" id="gauges"></div>
+      </div>
+      <div class="card">
+        <div class="tabs">
+          <button class="tab on" data-pane="pPid">Kaskad PID</button>
+          <button class="tab" data-pane="pFor">Kuvvetler</button>
+          <button class="tab" data-pane="pSum">Özet</button>
+          <span class="note" id="gain"></span>
+        </div>
+        <div class="pane" id="pPid">
           <div class="sub">Dış döngü · sapma e → pruva düzeltmesi Δψ</div>
           <div id="pidO"></div>
           <div class="sub">İç döngü · pruva hatası ε → dümen δr</div>
           <div id="pidI"></div>
         </div>
-        <div class="card">
-          <h4><span>Göstergeler</span><span id="twa"></span></h4>
-          <div class="gauges" id="gauges"></div>
-        </div>
-      </div>
-      <div class="col">
-        <div class="card">
-          <h4><span>Kuvvetler</span><span>tekne ekseninde, pruva yukarı</span></h4>
+        <div class="pane" id="pSum" hidden></div>
+        <div class="pane" id="pFor" hidden>
+          <div class="sub">Tekne ekseninde, pruva yukarı</div>
           <svg id="fsvg"></svg>
           <div class="leg" id="fleg"></div>
         </div>
       </div>
     </div>
   </div>
-  <div class="play">
-    <button id="bPlay">▶ Oynat</button>
-    <button id="bReset">⟲ Baştan</button>
-    <select id="spd" title="Oynatma hızı">
-      <option value="1">×1</option><option value="2">×2</option><option value="5" selected>×5</option>
-      <option value="10">×10</option><option value="20">×20</option>
-    </select>
-    <input id="slider" type="range" min="0" value="0" step="1">
-    <span id="tm" class="tm"></span>
-  </div>
   <div class="phases" id="phases"><span class="lbl">Evreler</span></div>
   <div class="charts" id="charts"></div>
 </div>
 <script>
-const D = __DATA__;
+/*__SIM__*/
+const D0 = __DATA__;
+// ROUTE-BEGIN · A→B benzetimi tarayıcıda (sim_physics.js = Python fiziğinin testle doğrulanmış karşılığı).
+// app.py simulate_route ile aynı: adım sırası (otopilot → servo → k1 → kayıt → durma → RK4), kayıt aralığı
+// (10 adım = 0.25 s), kaydedilen 42 alan ve durma koşulları. route_phases ile aynı evre analizi.
+function routeRun(rt, ap, env, e0, DT) {
+  const L = rt.L, tmax = Math.min(1200.0, 60.0 + 3.0 * (L + Math.abs(e0)) / Math.max(rt.V_ref, 0.3));
+  const R2D = 180 / Math.PI, D2R = Math.PI / 180, W0 = SIM.WIND_FROM_DEG, pm = (a, b) => { let m = a % b; if (m !== 0 && (m < 0) !== (b < 0)) m += b; return m; };
+  const K = ["t", "x", "y", "h", "V", "u", "v", "r", "e", "s", "psi_star", "o_P", "o_I", "o_D", "o_FF", "dpsi", "clamp", "eps",
+             "i_P", "i_I", "i_D", "g", "cmd", "dr", "ds", "alpha", "beta", "aaw", "Fx", "Fy", "X_r", "Y_r", "Y_h", "R", "N_s",
+             "N_h", "N_r", "N_munk", "lam", "cog", "twa", "flap"];
+  const rec = {}; for (const k of K) rec[k] = [];
+  const cs = { I_e: 0.0, I_h: 0.0 };
+  let st = rt.st0.slice(), dr = 0.0, slow = 0.0, status = "time";
+  const n = Math.round(tmax / DT);
+  for (let k = 0; k <= n; k++) {
+    const [x, y, h, u, v, r] = st;
+    const a = SIM.autopilot(st, rt, ap, cs, DT);
+    dr = SIM.servo(dr, a.cmd, ap.rud_rate, DT);
+    const [k1, b] = SIM.deriv(st, dr * D2R, env);
+    const s_al = (x - rt.A[0]) * rt.t_hat[0] + (y - rt.A[1]) * rt.t_hat[1];
+    if (k % 10 === 0) {
+      const sf = b.sf, row = [k * DT, x, y, pm(h, 360.0), a.V, u, v, r * R2D, a.e, s_al, pm(a.psi_star, 360.0), a.o_P, a.o_I,
+        a.o_D, a.o_FF, a.dpsi, a.clamp, a.eps, a.i_P, a.i_I, a.i_D, a.g, a.cmd, dr, b.delta_s, sf.alpha, b.beta, sf.aaw,
+        b.Fx, b.Fy, b.X_r, b.Y_r, b.Y_h, b.R, b.N_s, b.N_h, b.N_r, b.N_munk, a.lam, pm(h + a.lam, 360.0),
+        SIM.wrap180(h - W0), !!(sf.flapping || sf.streaming)];
+      for (let j = 0; j < K.length; j++) rec[K[j]].push(row[j]);
+    }
+    if (s_al >= L) { status = "reached"; break; }
+    slow = a.V < 0.05 ? slow + DT : 0.0;
+    if (slow > 30.0) { status = "stalled"; break; }
+    if (rt.track_nogo && Math.abs(a.e) > Math.abs(e0) + 40.0) { status = "nogo"; break; }
+    st = SIM.rk4(st, dr * D2R, env, DT, k1);
+  }
+  return { rec, status, t_end: rec.t[rec.t.length - 1], t_max: tmax };
+}
+function routePhases(R, ap, band, KT2MS) {
+  const t = R.t, e = R.e, dr = R.dr, n = t.length;
+  let i_turn = n;
+  for (let i = 0; i < n; i++) if (Math.abs(R.dpsi[i]) < ap.dpsi_max - 1e-6) { i_turn = i; break; }
+  let last = -1; for (let i = 0; i < n; i++) if (Math.abs(e[i]) >= band) last = i;
+  const i_set = last < 0 ? 0 : (last + 1 < n ? last + 1 : null);
+  if (i_set !== null) i_turn = Math.min(i_turn, i_set);
+  const phase = new Array(n).fill(i_set !== null ? 2 : 1);
+  for (let i = 0; i < Math.min(i_turn, n); i++) phase[i] = 0;
+  if (i_set !== null) for (let i = Math.min(i_turn, n); i < i_set; i++) phase[i] = 1;
+  const s0 = Math.sign(e[0]);
+  let i_max = 0; for (let i = 1; i < n; i++) if (Math.abs(dr[i]) > Math.abs(dr[i_max])) i_max = i;
+  let path_len = 0; for (let i = 1; i < n; i++) path_len += Math.hypot(R.x[i] - R.x[i - 1], R.y[i] - R.y[i - 1]);
+  const mean = a => a.reduce((p, q) => p + q, 0) / a.length;
+  const rows = [];
+  for (let k = 0; k < 3; k++) {
+    const idx = []; for (let i = 0; i < n; i++) if (phase[i] === k) idx.push(i);
+    if (!idx.length) continue;
+    const t0 = t[idx[0]], t1 = t[Math.min(idx[idx.length - 1] + 1, n - 1)], pick = a => idx.map(i => a[i]);
+    rows.push({ k, t0, t1, dur: t1 - t0, V: mean(pick(R.V)) / KT2MS, dr_mean: mean(pick(dr)),
+                dr_max: Math.max(...pick(dr).map(Math.abs)), ds_mean: mean(pick(R.ds)), lam_mean: mean(pick(R.lam)),
+                e_max: Math.max(...pick(e).map(Math.abs)) });
+  }
+  const on = []; for (let i = 0; i < n; i++) if (phase[i] === 2) on.push(dr[i]);
+  let hold = null, hold_std = null;
+  if (on.length >= 4) { hold = mean(on); hold_std = Math.sqrt(mean(on.map(v => (v - hold) ** 2))); }
+  let over;
+  if (s0 !== 0) { over = 0; for (const v of e) over = Math.max(over, -s0 * v); } else over = Math.max(...e.map(Math.abs));
+  return { phase, i_turn: i_turn < n ? i_turn : null, i_settle: i_set, band, t_turn: i_turn < n ? t[i_turn] : null,
+           t_settle: i_set === null ? null : t[i_set], overshoot: over, dr_max: dr[i_max], t_dr_max: t[i_max],
+           dr_hold: hold, dr_hold_std: hold_std, path_len, eff: path_len > 0 ? (R.s[n - 1] - R.s[0]) / path_len : null, rows };
+}
+// ROUTE-END
+const RUN = routeRun(D0.rt, D0.ap, D0.env, D0.e0, 0.025);
+const PHR = routePhases(RUN.rec, D0.ap, D0.meta.band, SIM.KT2MS);
+const D = Object.assign({}, RUN.rec, { phase: PHR.phase });
+D.meta = Object.assign({}, D0.meta, {
+  status: RUN.status, t_end: RUN.t_end, t_max: RUN.t_max, A: D0.rt.A, B: D0.rt.B, P0: D0.rt.st0.slice(0, 2),
+  chi: D0.rt.chi, L: D0.rt.L, lim: D0.rt.lim,
+  phases: { names: D0.meta.phase_names, i_turn: PHR.i_turn, i_settle: PHR.i_settle, band: PHR.band } });
 const N = D.t.length, M = D.meta, NS = "http://www.w3.org/2000/svg";
 const KT = 0.514444, d2r = Math.PI / 180;
 const $ = id => document.getElementById(id);
@@ -308,9 +424,26 @@ function drawOverlay() {
   el("line", { x1: 0, y1: Lp / 2, x2: Math.sin(dr) * rl, y2: Lp / 2 + Math.cos(dr) * rl, stroke: "#60A5FA", "stroke-width": 3,
                "stroke-linecap": "round" }, g);
   const ds = D.ds[i] * d2r, my = -M.boat.x_mast * k, sl = M.boat.boom * k;   // yelken (+δs bumba sancakta)
-  el("line", { x1: 0, y1: my, x2: Math.sin(ds) * sl, y2: my + Math.cos(ds) * sl, stroke: D.flap[i] ? "#F87171" : "#F8FAFC",
-               "stroke-width": 3, "stroke-linecap": "round" }, g);
+  const sc = D.flap[i] ? "#F87171" : "#F8FAFC";
+  if (M.sail === "wing")
+    el("path", { d: wingPath(ds, my, M.boat.chord * k), fill: sc, "fill-opacity": .85, stroke: sc, "stroke-width": 1.5,
+                 "stroke-linejoin": "round" }, g);
+  else
+    el("line", { x1: 0, y1: my, x2: Math.sin(ds) * sl, y2: my + Math.cos(ds) * sl, stroke: sc,
+                 "stroke-width": 3, "stroke-linecap": "round" }, g);
   el("circle", { cx: 0, cy: my, r: 3, fill: "#0F172A", stroke: "#F8FAFC", "stroke-width": 1.5 }, g);
+}
+// Sert kanat çizimi: kokpitteki naca_polygon ile aynı NACA 0012 dış hattı; direk kordun 1/4'ünde (pivot).
+// Eskiden yalnız direkten geriye kısa bir çizgi çiziliyordu (0.75·kord), dönüşü zor görünüyordu. Yalnız görünüm.
+function wingPath(ds, my, ch) {
+  const c = [Math.sin(ds), Math.cos(ds)], nr = [-c[1], c[0]], N = 24, up = [], lo = [];
+  for (let j = 0; j < N; j++) {
+    const xc = 0.5 * (1 - Math.cos(Math.PI * j / (N - 1)));
+    const yt = 5 * 0.12 * ch * (0.2969 * Math.sqrt(xc) - 0.1260 * xc - 0.3516 * xc ** 2 + 0.2843 * xc ** 3 - 0.1015 * xc ** 4);
+    const px = (xc - 0.25) * ch * c[0], py = my + (xc - 0.25) * ch * c[1];
+    up.push([px + yt * nr[0], py + yt * nr[1]]); lo.push([px - yt * nr[0], py - yt * nr[1]]);
+  }
+  return "M" + up.concat(lo.reverse()).map(q => q[0].toFixed(1) + " " + q[1].toFixed(1)).join("L") + "Z";
 }
 function drawMap() {
   if (W() < 20 || H() < 20) return;                                  // harita henüz yerleşmedi
@@ -370,11 +503,15 @@ function drawPanel() {
   drawForces();
 }
 const fsvg = $("fsvg");
+document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".tab").forEach(t => { const on = t === b; t.classList.toggle("on", on); $(t.dataset.pane).hidden = !on; });
+  drawPanel();
+});
 const FMAX = Math.max(1e-6, ...D.Fx.map((v, i) => Math.hypot(v, D.Fy[i])), ...D.Y_h.map(Math.abs),
                       ...D.X_r.map((v, i) => Math.hypot(v, D.Y_r[i])));
 function drawForces() {
   fsvg.innerHTML = "";
-  const w = fsvg.clientWidth || 280, h = 170, cx = w / 2, cy = h / 2 + 4, Lp = 104, sep = 30, sc = 58 / FMAX, i = idx;
+  const w = fsvg.clientWidth || 280, h = fsvg.clientHeight || 160, cx = w / 2, cy = h / 2 + 4, Lp = 104, sep = 30, sc = 58 / FMAX, i = idx;
   for (const [sx, c] of [[-sep, "#FF7F0E"], [sep, "#334155"]])
     el("rect", { x: cx + sx - 6, y: cy - Lp / 2, width: 12, height: Lp, rx: 6, fill: c, "fill-opacity": .55,
                  stroke: "#64748B" }, fsvg);
@@ -585,6 +722,68 @@ map.addEventListener("pointermove", ev => {
   view.cx = drag[2] - (ev.clientX - drag[0]) / view.s; view.cy = drag[3] + (ev.clientY - drag[1]) / view.s; drawMap();
 });
 map.addEventListener("pointerup", () => { drag = null; map.classList.remove("drag"); });
+
+// ---------------- Özet (Python route_summary ile aynı içerik) ----------------
+const esc = t => String(t).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+const scard = (l, v, u, c, tip, sub) => `<div class="scard" title="${esc(tip)}"><div class="l">${l} ⓘ</div>` +
+  `<div class="v" style="color:${c}">${v}<small>${u}</small>${sub ? `<em>${sub}</em>` : ""}</div></div>`;
+const sg = (v, d) => (v >= 0 ? "+" : "") + v.toFixed(d);
+function buildSummary() {
+  const P = PHR, ap = D0.ap, nogo = !!D0.rt.track_nogo, TOLs = M.arrive_tol ?? 5, endE = Math.abs(D.e[N - 1]);
+  const f = (v, d, u = "") => (v === null || v === undefined ? "—" : v.toFixed(d) + u);
+  const nt = "Rota ölü açıda: tekne bu doğruya oturamaz (tramola yok), bu değer başarım ölçüsü olarak anlamsız. Gözlenen değer: ";
+  let arr;
+  if (M.status === "reached" && endE <= TOLs)
+    arr = scard("Varış süresi", M.t_end.toFixed(0), "s", "#22C55E", `B'ye ${endE.toFixed(1)} m yakından varılan an (tolerans ${TOLs.toFixed(0)} m).`);
+  else if (M.status === "reached")
+    arr = scard("B hizası geçildi", M.t_end.toFixed(0), "s", "#F59E0B", `Tekne rota boyunca B'nin hizasını ${M.t_end.toFixed(0)}. saniyede geçti ama ` +
+                `B'ye varmadı: B'nin ${endE.toFixed(1)} m yanından geçti (varış toleransı ${TOLs.toFixed(0)} m).`, `B'ye ${endE.toFixed(0)} m`);
+  else {
+    const why = { nogo: "rota ölü açıda", stalled: "tekne durdu", time: "süre doldu" }[M.status] || "";
+    arr = scard("Varış süresi", "—", "s", "#22C55E", `B'ye varılamadı (${why}).`, why || null);
+  }
+  const effp = P.eff === null ? null : 100 * P.eff;
+  const hold = P.dr_hold === null ? "—" : `${sg(P.dr_hold, 1)}° ±${P.dr_hold_std.toFixed(1)}`;
+  const cards = [arr,
+    scard("Son sapma |e|", endE.toFixed(2), "m", endE < 1 ? "#22C55E" : "#F59E0B", "Benzetim sonunda rota doğrusuna uzaklık."),
+    scard("Oturma başladı", nogo ? "—" : f(P.t_turn, 1), "s", "#C084FC", nogo ? nt + f(P.t_turn, 1, " s") :
+          `Dış döngünün doymadan çıktığı an (|Δψ| < Δψmax = ${ap.dpsi_max.toFixed(0)}°): tekne rotaya en büyük açıyla yaklaşmayı bırakıp dönmeye başlıyor.`),
+    scard("Rotaya oturdu", f(P.t_settle, 1), "s", "#2DD4BF", `Bu andan sonra sapma hep |e| < ${P.band.toFixed(0)} m.`),
+    scard("Aşım", nogo ? "—" : P.overshoot.toFixed(2), "m", "#F59E0B", nogo ? nt + P.overshoot.toFixed(2) + " m" :
+          "Rotanın öbür tarafına en fazla ne kadar geçtiği."),
+    scard("En büyük dümen", sg(P.dr_max, 1), "°", "#F87171", `${P.t_dr_max.toFixed(1)}. saniyede. Sınır ±${ap.rud_max.toFixed(0)}°.`),
+    scard("Rotada dümen", hold, "", "#60A5FA", "Rotaya oturduktan sonra ortalama dümen açısı ± standart sapma: yelkenin döndürme etkisini dengeleyen açı."),
+    scard("Yol verimi", nogo ? "—" : f(effp, 0), "%", "#22C55E", nogo ? nt + f(effp, 0, " %") :
+          `Rota boyunca ilerleme / gidilen yol (${P.path_len.toFixed(0)} m). %100 = hiç sapmadan düz gitmek.`)];
+  const COLS = [["Zaman aralığı (s)", r => `${r.t0.toFixed(1)} – ${r.t1.toFixed(1)}`], ["Süre (s)", r => r.dur.toFixed(1)],
+    ["Ort. hız (kt)", r => r.V.toFixed(2)], ["Ort. dümen δr (°)", r => sg(r.dr_mean, 1)], ["En büyük |δr| (°)", r => r.dr_max.toFixed(1)],
+    ["Ort. yelken δs (°)", r => sg(r.ds_mean, 1)], ["Ort. yan kayma λ (°)", r => sg(r.lam_mean, 1)], ["En büyük |e| (m)", r => r.e_max.toFixed(2)]];
+  const tbl = `<table class="stbl"><thead><tr><th>Evre</th>${P.rows.map(r => `<th><i style="background:${PCOL[r.k]}"></i>${M.phases.names[r.k]}</th>`).join("")}</tr></thead>` +
+    `<tbody>${COLS.map(([l, fn]) => `<tr><td>${l}</td>${P.rows.map(r => `<td>${fn(r)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  $("pSum").innerHTML = (nogo ? `<div class="snote">Rota ölü açıda: oturma, aşım ve yol verimi gösterilmiyor; evre tablosu yalnız gözlemdir.</div>` : "") +
+    `<div class="scards">${cards.join("")}</div>${tbl}` +
+    `<div class="sbtn"><button id="bCsvTr" title="Türkçe Excel için: ';' ile ayrılmış, ondalık virgüllü.">⬇ CSV · Excel (Türkçe)</button>` +
+    `<button id="bCsv" title="',' ile ayrılmış, ondalık noktalı (Python, MATLAB, İngilizce Excel).">⬇ CSV · standart</button></div>` +
+    `<div class="scap">Tüm zaman serisi, 0.25 s aralıkla ${N} satır, ${M.csv_cols.length} sütun: konum, evre, açılar, hızlar, PID katkıları, kuvvetler ve momentler.</div>`;
+  $("bCsvTr").onclick = () => saveCsv(true);
+  $("bCsv").onclick = () => saveCsv(false);
+}
+// CSV: Python route_csv (pandas to_csv, float_format %.4f) ile aynı biçim
+function routeCsvText(tr) {
+  const sep = tr ? ";" : ",", f4 = v => { const s = (Object.is(v, -0) ? "-" : "") + v.toFixed(4); return tr ? s.replace(".", ",") : s; };
+  const cell = (k, i) => k === "phase" ? M.phases.names[D.phase[i]] : k === "Vkt" ? f4(D.V[i] / SIM.KT2MS) :
+    (k === "clamp" || k === "flap") ? (D[k][i] ? "evet" : "hayır") : f4(D[k][i]);
+  const lines = [M.csv_cols.map(c => c[1]).join(sep)];
+  for (let i = 0; i < N; i++) lines.push(M.csv_cols.map(([k]) => cell(k, i)).join(sep));
+  return lines.join("\n") + "\n";
+}
+function saveCsv(tr) {
+  const blob = new Blob(["﻿" + routeCsvText(tr)], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = tr ? "rota_benzetimi_excel.csv" : "rota_benzetimi.csv"; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+buildSummary();
 
 // ---------------- Başlangıç ----------------
 const E_END = Math.abs(D.e[N - 1]), TOL = M.arrive_tol ?? 5;           // varış: B hizası rotaya TOL m'den yakın geçildiyse

@@ -1300,8 +1300,15 @@ div[data-testid="stPlotlyChart"] {{ background:{BG}; border-radius:12px; overflo
 [data-testid="stSidebarNav"] {{ padding-bottom:4px; }}
 [data-testid="stSidebarNav"] a span {{ font-weight:600; }}
 /* Kendi HTML bloklarımız: Streamlit'in markdown alt boşluk düzeltmesi (−16px) bloklarımızı üst üste bindiriyordu */
-[data-testid="stMarkdownContainer"]:has(> .ck-panel, > .ck-chips, > .ck-h, > .rt-title, > .rt-tbl, > .pm-h, > .sb-note) {{ margin-bottom:0 !important; }}
+[data-testid="stMarkdownContainer"]:has(> .ck-panel, > .ck-chips, > .ck-h, > .rt-title, > .rt-head, > .rt-tbl, > .pm-h, > .sb-note) {{ margin-bottom:0 !important; }}
 .rt-title {{ font-size:22px; font-weight:800; margin:2px 0 4px; }}
+.rt-head {{ display:flex; gap:10px; align-items:stretch; flex-wrap:wrap; }}
+.rt-head .rt-title {{ flex:0 0 auto; align-self:center; margin:0 8px 0 0; font-size:21px; white-space:nowrap; }}
+.rt-head .ck-card {{ padding:5px 12px; min-width:120px; }}
+.rt-head .ck-lbl {{ font-size:10.5px; }}
+.rt-head .ck-val {{ font-size:20px; }}
+.rt-head .ck-chip {{ align-self:center; }}
+.rt-i {{ font-size:14px; font-weight:600; color:{MUTED}; cursor:help; margin-left:4px; vertical-align:middle; }}
 .rt-desc {{ color:{MUTED}; font-size:13px; line-height:1.45; margin-bottom:6px; }}
 .rt-sum {{ flex-wrap:wrap; margin-bottom:10px !important; }}
 .rt-sum .ck-card {{ min-width:150px; }}
@@ -1318,6 +1325,21 @@ div[data-testid="stPlotlyChart"] {{ background:{BG}; border-radius:12px; overflo
 [class*="st-key-pair_"] [data-testid="stNumberInputStepUp"],
 [class*="st-key-pair_"] [data-testid="stNumberInputStepDown"] {{ display:none !important; }}
 [class*="st-key-pair_"] [data-testid="stNumberInputField"] {{ text-align:center; padding-left:4px; padding-right:4px; }}
+/* Kaydırıcı tam genişlik; sayı kutusu etiket satırının sağında (değer iki kez yazılmaz). Yalnız görünüm. */
+[class*="st-key-pair_"] [data-testid="stHorizontalBlock"] {{ display:block !important; position:relative; }}
+[class*="st-key-pair_"] [data-testid="stColumn"]:first-child {{ width:100% !important; }}
+[class*="st-key-pair_"] [data-testid="stColumn"]:last-child {{ position:absolute; top:-3px; right:0;
+    width:68px !important; min-width:0 !important; }}
+[class*="st-key-pair_"] [data-testid="stColumn"]:last-child [data-baseweb="input"] {{ height:30px; }}
+[class*="st-key-pair_"] [data-testid="stSlider"] [data-testid="stWidgetLabel"] {{ padding-right:76px; }}
+[class*="st-key-pair_"] [data-testid="stSliderThumbValue"] {{ opacity:0; }}
+/* Simülasyon pencereleri ekran boyuna uyar (geniş ekran); dar ekranda eski sabit yükseklik */
+@media (min-width: 1200px) and (min-height: 640px) {{
+  .st-key-rtview iframe {{ height:calc(100vh - 208px) !important; min-height:470px; }}
+  .st-key-drview iframe {{ height:calc(100vh - 74px) !important; min-height:470px; }}
+  .st-key-rtview [data-testid="stElementContainer"], .st-key-drview [data-testid="stElementContainer"] {{
+    height:auto !important; flex:0 0 auto !important; }}
+}}
 </style>
 """
 
@@ -1373,27 +1395,16 @@ ARRIVE_TOL = 5.0           # m: B hizası geçilirken rotaya uzaklık bundan kü
 ROUTE_VIEW = os.path.join(os.path.dirname(os.path.abspath(__file__)), "route_view.html")
 
 
-@st.cache_data(show_spinner=False, max_entries=16)
-def _route_cached(A, B, e0, head_err, tws_kt, trim_auto, trim_manual, sail_type, p_vals, ap_vals):
-    return simulate_route(A, B, e0, head_err, tws_kt, trim_auto, trim_manual, sail_type,
-                          Params(*p_vals), Autopilot(*ap_vals))
-
-
-def _route_html(res, ph, tws_kt, sail_type, p, ap):
-    data = {k: np.round(np.asarray(res[k], dtype=float), 3).tolist() for k in ROUTE_FIELDS}
-    data["clamp"] = [bool(v) for v in res["clamp"]]
-    data["flap"] = [bool(v) for v in res["flap"]]
-    data["phase"] = ph["phase"].tolist()
-    data["meta"] = dict(
-        phases=dict(names=PHASES, i_turn=ph["i_turn"], i_settle=ph["i_settle"], band=ph["band"]),
-        A=res["A"].tolist(), B=res["B"].tolist(), P0=res["P0"].tolist(), chi=res["chi"], L=res["L"],
-        lim=res["lim"], status=res["status"], t_end=res["t_end"], t_max=res["t_max"], tws_kt=tws_kt, rec_dt=0.25,
-        arrive_tol=ARRIVE_TOL,
-        boat=dict(L=p.L, sep=p.hull_sep, x_mast=p.x_mast,
+def _route_html(rt, env, ap, e0, tws_kt, sail_type, p):
+    """A→B görüntüleyicisi: benzetim tarayıcıda (sim_physics.js). Python yalnız başlangıç koşullarını ve ortamı yollar."""
+    data = dict(rt=rt, env=env, ap={k: getattr(ap, k) for k in ap.__dataclass_fields__}, e0=e0, meta=dict(
+        phase_names=PHASES, band=SETTLE_BAND, tws_kt=tws_kt, rec_dt=0.25, arrive_tol=ARRIVE_TOL, sail=sail_type,
+        csv_cols=[list(c) for c in ROUTE_CSV],
+        boat=dict(L=p.L, sep=p.hull_sep, x_mast=p.x_mast, chord=p.chord_wing,
                   boom=p.boom_len if sail_type == "soft" else 0.75 * p.chord_wing),
-        ap=dict(dpsi_max=ap.dpsi_max, rud_max=ap.rud_max, gain_sched=ap.gain_sched))
-    with open(ROUTE_VIEW, encoding="utf-8") as fh:
-        return fh.read().replace("__DATA__", json.dumps(data))
+        ap=dict(dpsi_max=ap.dpsi_max, rud_max=ap.rud_max, gain_sched=ap.gain_sched)))
+    with open(ROUTE_VIEW, encoding="utf-8") as fh, open(SIM_JS, encoding="utf-8") as fs:
+        return fh.read().replace("/*__SIM__*/", fs.read()).replace("__DATA__", json.dumps(data))
 
 
 def _pnum(col, label, lo, hi, default, step, key, **kw):
@@ -1415,27 +1426,44 @@ def _ptoggle(col, label, default, key, **kw):
     return st.session_state[key]
 
 
-def _route_controls(flat=False):
+def _route_controls(flat=False, compact=False):
     """A→B senaryosu ve otopilot ayarları. A→B Rota ve Kumanda sayfalarında ortak; sayfa değişince korunur.
-    flat: PID ayarları ayrı açılır kutusuz (zaten bir açılır kutunun içindeyken)."""
+    flat: PID ayarları ayrı açılır kutusuz (zaten bir açılır kutunun içindeyken).
+    compact: A, B ve başlangıç tek sırada; telafi anahtarları otopilot açılır kutusunda (anahtarlar aynı)."""
     d = Autopilot()
-    c = st.columns(4)
-    ax = _pnum(c[0], "A · Doğu x (m)", -5000.0, 5000.0, 0.0, 10.0, "rt_ax")
-    ay = _pnum(c[1], "A · Kuzey y (m)", -5000.0, 5000.0, 0.0, 10.0, "rt_ay")
-    bx = _pnum(c[2], "B · Doğu x (m)", -5000.0, 5000.0, 200.0, 10.0, "rt_bx")
-    by = _pnum(c[3], "B · Kuzey y (m)", -5000.0, 5000.0, 0.0, 10.0, "rt_by")
-    c = st.columns(4, vertical_alignment="bottom")
-    e0 = _pnum(c[0], "Başlangıç sapması (m)", -500.0, 500.0, 30.0, 5.0, "rt_e0",
+    if compact:
+        c = st.columns(6, vertical_alignment="bottom")
+        c_ab, c_e = c[:4], c[4:]
+    else:
+        c_ab = st.columns(4)
+        c_e = st.columns(4, vertical_alignment="bottom")[:2]
+    ax = _pnum(c_ab[0], "A · Doğu x (m)", -5000.0, 5000.0, 0.0, 10.0, "rt_ax")
+    ay = _pnum(c_ab[1], "A · Kuzey y (m)", -5000.0, 5000.0, 0.0, 10.0, "rt_ay")
+    bx = _pnum(c_ab[2], "B · Doğu x (m)", -5000.0, 5000.0, 200.0, 10.0, "rt_bx")
+    by = _pnum(c_ab[3], "B · Kuzey y (m)", -5000.0, 5000.0, 0.0, 10.0, "rt_by")
+    e0 = _pnum(c_e[0], "Başlangıç sapması (m)", -500.0, 500.0, 30.0, 5.0, "rt_e0",
                help="Başlangıç noktasının A'dan rotaya dik uzaklığı e₀. + : rotanın sancak tarafı "
                     "(A'dan B'ye bakarken sağ), − : iskele tarafı.")
-    he = _pnum(c[1], "Pruva hatası (°)", -180.0, 180.0, 0.0, 5.0, "rt_he",
+    he = _pnum(c_e[1], "Pruva hatası (°)", -180.0, 180.0, 0.0, 5.0, "rt_he",
                help="Başlangıç pruvası = rota açısı χ + bu değer. Tekne o pruvadaki durağan hızla başlar.")
-    c = st.columns(2)
-    ff = _ptoggle(c[0], "Yan kayma telafisi (ileri besleme)", d.leeway_ff, "rt_ff",
-                  help="Hedef pruvadan yan kayma açısı λ çıkarılır; böylece teknenin GİDİŞ yönü (COG) rotaya oturur.")
-    gs = _ptoggle(c[1], "Hıza göre kazanç", d.gain_sched, "rt_gs",
-                  help="Dümen etkinliği hızın karesiyle değişir; iç döngü kazancı (V_ref/V)² ile ölçeklenir (×0.5–×3).")
-    with st.container() if flat else st.expander("PID kazançları ve dümen sınırları", expanded=False):
+
+    def toggles():
+        c = st.columns(2)
+        ff_ = _ptoggle(c[0], "Yan kayma telafisi (ileri besleme)", d.leeway_ff, "rt_ff",
+                       help="Hedef pruvadan yan kayma açısı λ çıkarılır; böylece teknenin GİDİŞ yönü (COG) rotaya "
+                            "oturur.")
+        gs_ = _ptoggle(c[1], "Hıza göre kazanç", d.gain_sched, "rt_gs",
+                       help="Dümen etkinliği hızın karesiyle değişir; iç döngü kazancı (V_ref/V)² ile ölçeklenir "
+                            "(×0.5–×3).")
+        return ff_, gs_
+
+    if not compact:
+        ff, gs = toggles()
+    box_lbl = ("⚙️ Otopilot ayarları · PID kazançları, dümen sınırları, yan kayma telafisi" if compact
+               else "PID kazançları ve dümen sınırları")
+    with st.container() if flat else st.expander(box_lbl, expanded=False):
+        if compact:
+            ff, gs = toggles()
         if flat:
             st.caption("PID kazançları ve dümen sınırları")
         c = st.columns(4, vertical_alignment="bottom")
@@ -1472,106 +1500,40 @@ def _files_missing(*paths):
     return bool(miss)
 
 
+_RT_DESC = ("Tekne A'nın dışından başlar ve A–B doğrusuna oturmaya çalışır: dış döngü doğrudan sapmayı (e) ölçüp "
+            "hedef pruvayı (ψ*) verir, iç döngü pruva hatasından dümen açısını (δr) hesaplar. Fizik kokpitle aynıdır "
+            "(görünür rüzgarda yelken kuvvetleri, 3-DOF ataletli hareket, yan kayma, dümen stall'u); otopilot yalnız "
+            "dümeni yönetir. Yelken, rüzgar ve tekne parametreleri sol menüdedir. Rüzgar kuzeyden eser.")
+_RT_TITLE = f'<div class="rt-title">A→B Rota <span class="rt-i" title="{_RT_DESC}">ⓘ</span></div>'
+
+
 def route_page(sail_type, tws_kt, trim_auto, trim_manual, p):
-    if _files_missing(ROUTE_VIEW):
+    if _files_missing(ROUTE_VIEW, SIM_JS):
         return
-    st.markdown('<div class="rt-title">A\'dan B\'ye düz rota · kaskad PID otopilot</div>'
-                '<div class="rt-desc">Tekne A\'nın dışından başlar ve A–B doğrusuna oturmaya çalışır: dış döngü '
-                'doğrudan sapmayı (e) ölçüp hedef pruvayı (ψ*) verir, iç döngü pruva hatasından dümen açısını (δr) '
-                'hesaplar. Fizik kokpitle <b>aynıdır</b> (görünür rüzgarda yelken kuvvetleri, 3-DOF ataletli hareket, '
-                'yan kayma, dümen stall\'u); otopilot yalnız dümeni yönetir. Yelken, rüzgar ve tekne parametreleri '
-                'sol menüdedir. Rüzgar kuzeyden eser.</div>', unsafe_allow_html=True)
-    (ax, ay), (bx, by), e0, he, ap = _route_controls()
+    head = st.empty()
+    head.markdown(f'<div class="rt-head">{_RT_TITLE}</div>', unsafe_allow_html=True)
+    (ax, ay), (bx, by), e0, he, ap = _route_controls(compact=True)
     if not _route_ok((ax, ay), (bx, by)):
         return
-    with st.spinner("Rota benzetimi hesaplanıyor…"):
-        res = _route_cached((ax, ay), (bx, by), e0, he, tws_kt, trim_auto, trim_manual, sail_type,
-                            astuple(p), astuple(ap))
-    twa_t = abs(wrap180(res["chi"] - WIND_FROM_DEG))
-    lim = res["lim"]
-    if res["track_nogo"]:
-        st.warning(f"Rota ölü açıda: rota TWA {twa_t:.0f}° < ölü açı sınırı ±{lim:.1f}°. Tekne bu doğru boyunca "
-                   "gidemez; otopilot hedef pruvayı ölü açı sınırında tutar. Bu sürümde tramola (zig-zag) yok.")
-    end_e = abs(float(res["e"][-1]))
-    # Benzetim, tekne rota boyunca B hizasını geçince durur (fizik/durma koşulu değişmedi). Yalnız GÖSTERİM:
-    # B'yi ARRIVE_TOL m'den yakın geçtiyse "varış", daha uzaktan geçtiyse "B hizası geçildi" denir.
-    if res["status"] == "reached" and end_e <= ARRIVE_TOL:
-        arr = _card("Varış süresi", f"{res['t_end']:.0f}", "s", "#22C55E",
-                    f"B'ye {end_e:.1f} m yakından varılan an (tolerans {ARRIVE_TOL:.0f} m).")
-    elif res["status"] == "reached":
-        arr = _card("B hizası geçildi", f"{res['t_end']:.0f}", "s", "#F59E0B",
-                    f"Tekne rota boyunca B'nin hizasını {res['t_end']:.0f}. saniyede geçti ama B'ye varmadı: "
-                    f"B'nin {end_e:.1f} m yanından geçti (varış toleransı {ARRIVE_TOL:.0f} m).",
-                    sub=f"B'ye {end_e:.0f} m")
-    else:
-        why = {"nogo": "rota ölü açıda", "stalled": "tekne durdu", "time": "süre doldu"}.get(res["status"], "")
-        arr = _card("Varış süresi", "—", "s", "#22C55E", f"B'ye varılamadı ({why}).", sub=why or None)
+    rt = _route_start_cached((ax, ay), (bx, by), e0, he, tws_kt, trim_auto, trim_manual, sail_type, astuple(p))
+    twa_t = abs(wrap180(rt["chi"] - WIND_FROM_DEG))
+    lim = rt["lim"]
+    nogo_txt = (f"Rota ölü açıda: rota TWA {twa_t:.0f}° < ölü açı sınırı ±{lim:.1f}°. Tekne bu doğru boyunca "
+                "gidemez; otopilot hedef pruvayı ölü açı sınırında tutar. Bu sürümde tramola (zig-zag) yok."
+                if rt["track_nogo"] else None)
+    # Benzetimin kendisi tarayıcıda koşar (route_view.html: routeRun = simulate_route'un birebir karşılığı);
+    # varış süresi, son sapma, evreler, özet tablosu ve CSV pencerenin "Özet" sekmesindedir.
     cards = "".join([
-        _card("Rota açısı χ", f"{res['chi']:.1f}", "°", "#2DD4BF", "A'dan B'ye pusula açısı (0° = Kuzey)."),
-        _card("Mesafe", f"{res['L']:.0f}", "m", "#38BDF8", "A–B doğrusunun uzunluğu."),
-        _card("Rota TWA", f"{twa_t:.0f}", "°", "#EF4444" if res["track_nogo"] else "#FBBF24",
-              f"Rota boyunca gerçek rüzgar açısı. Ölü açı sınırı ±{lim:.1f}°." if lim else "Gerçek rüzgar açısı."),
-        arr,
-        _card("Son sapma |e|", f"{end_e:.2f}", "m", "#22C55E" if end_e < 1 else "#F59E0B",
-              "Benzetim sonunda rota doğrusuna uzaklık."),
+        _card("Rota açısı χ", f"{rt['chi']:.1f}", "°", "#2DD4BF", "A'dan B'ye pusula açısı (0° = Kuzey)."),
+        _card("Mesafe", f"{rt['L']:.0f}", "m", "#38BDF8", "A–B doğrusunun uzunluğu."),
+        _card("Rota TWA", f"{twa_t:.0f}", "°", "#EF4444" if rt["track_nogo"] else "#FBBF24",
+              nogo_txt or (f"Rota boyunca gerçek rüzgar açısı. Ölü açı sınırı ±{lim:.1f}°." if lim
+                           else "Gerçek rüzgar açısı."), sub="⚠ ölü açıda" if nogo_txt else None),
     ])
-    st.markdown(f'<div class="ck-row">{cards}</div>', unsafe_allow_html=True)
-    ph = route_phases(res, ap)
-    components.html(_route_html(res, ph, tws_kt, sail_type, p, ap), height=915, scrolling=True)
-    route_summary(res, ph, ap)
-
-
-def route_summary(res, ph, ap):
-    """Rapor için özet: ana sonuçlar, evre tablosu ve tüm zaman serisinin CSV'si."""
-    st.markdown('<div class="ck-h" style="margin-top:6px">Özet</div>', unsafe_allow_html=True)
-    f = lambda v, fmt, u="": "—" if v is None else f"{v:{fmt}}{u}"
-    hold = "—" if ph["dr_hold"] is None else f"{ph['dr_hold']:+.1f}° ±{ph['dr_hold_std']:.1f}"
-    # Rota ölü açıdaysa tekne bu doğruya oturamaz: oturma/aşım/verim başarım ölçüsü olarak anlamsızdır
-    # (aşım, benzetimin |e| > |e0| + 40 m eşiğinde durmasından gelir). Değerler gösterilmez, nedeni ipucunda.
-    nogo = bool(res.get("track_nogo"))
-    nogo_tip = ("Rota ölü açıda: tekne bu doğruya oturamaz (tramola yok), bu değer başarım ölçüsü olarak anlamsız. "
-                "Gözlenen değer: ")
-    if nogo:
-        st.caption("Rota ölü açıda: oturma, aşım ve yol verimi gösterilmiyor; evre tablosu yalnız gözlemdir.")
-    cards = "".join([
-        _card("Oturma başladı", "—" if nogo else f(ph["t_turn"], ".1f"), "s", "#C084FC",
-              (nogo_tip + f(ph["t_turn"], ".1f", " s")) if nogo else
-              f"Dış döngünün doymadan çıktığı an (|Δψ| < Δψmax = {ap.dpsi_max:.0f}°): tekne rotaya en büyük açıyla "
-              "yaklaşmayı bırakıp dönmeye başlıyor."),
-        _card("Rotaya oturdu", f(ph["t_settle"], ".1f"), "s", "#2DD4BF",
-              f"Bu andan sonra sapma hep |e| < {ph['band']:.0f} m."),
-        _card("Aşım", "—" if nogo else f"{ph['overshoot']:.2f}", "m", "#F59E0B",
-              (nogo_tip + f"{ph['overshoot']:.2f} m") if nogo else
-              "Rotanın öbür tarafına en fazla ne kadar geçtiği."),
-        _card("En büyük dümen", f"{ph['dr_max']:+.1f}", "°", "#F87171",
-              f"{ph['t_dr_max']:.1f}. saniyede. Sınır ±{ap.rud_max:.0f}°."),
-        _card("Rotada dümen", hold, "", "#60A5FA",
-              "Rotaya oturduktan sonra ortalama dümen açısı ± standart sapma: yelkenin döndürme etkisini "
-              "dengeleyen açı."),
-        _card("Yol verimi", "—" if nogo else f(None if ph["eff"] is None else 100 * ph["eff"], ".0f"), "%", "#22C55E",
-              (nogo_tip + f(None if ph["eff"] is None else 100 * ph["eff"], ".0f", " %")) if nogo else
-              f"Rota boyunca ilerleme / gidilen yol ({ph['path_len']:.0f} m). %100 = hiç sapmadan düz gitmek."),
-    ])
-    st.markdown(f'<div class="ck-row rt-sum">{cards}</div>', unsafe_allow_html=True)
-    head = ("Evre", "Zaman aralığı (s)", "Süre (s)", "Ort. hız (kt)", "Ort. dümen δr (°)", "En büyük |δr| (°)",
-            "Ort. yelken δs (°)", "Ort. yan kayma λ (°)", "En büyük |e| (m)")
-    color = dict(zip(PHASES, ("#38BDF8", "#C084FC", "#2DD4BF")))
-    body = "".join(
-        f'<tr><td><i style="background:{color[r["name"]]}"></i>{r["name"]}</td>'
-        f'<td>{r["t0"]:.1f} – {r["t1"]:.1f}</td><td>{r["dur"]:.1f}</td><td>{r["V"]:.2f}</td>'
-        f'<td>{r["dr_mean"]:+.1f}</td><td>{r["dr_max"]:.1f}</td><td>{r["ds_mean"]:+.1f}</td>'
-        f'<td>{r["lam_mean"]:+.1f}</td><td>{r["e_max"]:.2f}</td></tr>' for r in ph["rows"])
-    st.markdown(f'<div class="rt-tbl"><table><thead><tr>{"".join(f"<th>{h}</th>" for h in head)}</tr></thead>'
-                f'<tbody>{body}</tbody></table></div>', unsafe_allow_html=True)
-    c = st.columns([1, 1, 2], vertical_alignment="center")
-    c[0].download_button("⬇ CSV · Excel (Türkçe)", route_csv(res, ph, excel_tr=True), "rota_benzetimi_excel.csv",
-                         "text/csv", use_container_width=True, key="rt_csv_tr",
-                         help="Türkçe Excel için: ';' ile ayrılmış, ondalık virgüllü.")
-    c[1].download_button("⬇ CSV · standart", route_csv(res, ph), "rota_benzetimi.csv", "text/csv",
-                         use_container_width=True, key="rt_csv",
-                         help="',' ile ayrılmış, ondalık noktalı (Python, MATLAB, İngilizce Excel).")
-    c[2].caption(f"Tüm zaman serisi, 0.25 s aralıkla {len(res['t'])} satır, {len(ROUTE_CSV)} sütun: konum, evre, "
-                 "açılar, hızlar, PID katkıları, kuvvetler ve momentler.")
+    head.markdown(f'<div class="rt-head">{_RT_TITLE}{cards}</div>', unsafe_allow_html=True)
+    env = sim_env(tws_kt, trim_auto, trim_manual, sail_type, p)
+    with st.container(key="rtview"):
+        components.html(_route_html(rt, env, ap, e0, tws_kt, sail_type, p), height=915, scrolling=True)
 
 
 # ----------------------------------------------------------------------------
@@ -1591,33 +1553,37 @@ def _route_start_cached(A, B, e0, head_err, tws_kt, trim_auto, trim_manual, sail
 def _drive_html(rt, env, ap, ghost, e0, tws_kt, sail_type, p):
     data = dict(env=env, rt=rt, ap={k: getattr(ap, k) for k in ap.__dataclass_fields__}, ghost=ghost, e0=e0,
                 meta=dict(tws_kt=tws_kt, lim=rt["lim"], sail=sail_type,
-                          boat=dict(L=p.L, sep=p.hull_sep, x_mast=p.x_mast,
+                          boat=dict(L=p.L, sep=p.hull_sep, x_mast=p.x_mast, chord=p.chord_wing,
                                     boom=p.boom_len if sail_type == "soft" else 0.75 * p.chord_wing)))
     with open(DRIVE_VIEW, encoding="utf-8") as fh, open(SIM_JS, encoding="utf-8") as fs:
         return fh.read().replace("/*__SIM__*/", fs.read()).replace("__DATA__", json.dumps(data))
 
 
+_DR_DESC = ("Tekneyi kumandayla (Xbox / PlayStation, USB ya da Bluetooth) veya klavyeyle sen yönetirsin. Fizik kokpit "
+            "ve A→B ile aynıdır (aynı denklemlerin tarayıcıda çalışan karşılığı, testle doğrulanır). Kumandayı "
+            "bağladıktan sonra bir tuşuna bas; tarayıcı ancak o zaman görür.")
+_DR_TITLE = f'<div class="rt-title">Kumanda ile sür <span class="rt-i" title="{_DR_DESC}">ⓘ</span></div>'
+
+
 def drive_page(sail_type, tws_kt, trim_auto, trim_manual, p):
     if _files_missing(DRIVE_VIEW, SIM_JS):
         return
-    st.markdown('<div class="rt-title">Kumanda ile sür · A\'dan B\'ye</div>'
-                '<div class="rt-desc">Tekneyi kumandayla (Xbox / PlayStation, USB ya da Bluetooth) veya klavyeyle sen '
-                'yönetirsin. Fizik kokpit ve A→B ile <b>aynıdır</b> (aynı denklemlerin tarayıcıda çalışan karşılığı, '
-                'testle doğrulanır). Kumandayı bağladıktan sonra bir tuşuna bas; tarayıcı ancak o zaman görür.</div>',
-                unsafe_allow_html=True)
-    with st.expander("Senaryo ve otopilot ayarları (A, B, başlangıç, PID) · A→B Rota ile ortak", expanded=False):
+    c_t, c_x = st.columns([1, 3.2], vertical_alignment="center")
+    head = c_t.empty()
+    head.markdown(f'<div class="rt-head">{_DR_TITLE}</div>', unsafe_allow_html=True)
+    with c_x.expander("⚙️ Senaryo ve otopilot ayarları (A, B, başlangıç, PID) · A→B Rota ile ortak", expanded=False):
         A, B, e0, he, ap = _route_controls(flat=True)
     if not _route_ok(A, B):
         return
     with st.spinner("Senaryo hazırlanıyor…"):
         rt = _route_start_cached(A, B, e0, he, tws_kt, trim_auto, trim_manual, sail_type, astuple(p))
-        res = _route_cached(A, B, e0, he, tws_kt, trim_auto, trim_manual, sail_type, astuple(p), astuple(ap))
-    ghost = dict(x=np.round(res["x"], 2).tolist(), y=np.round(res["y"], 2).tolist(),
-                 t_end=res["t_end"] if res["status"] == "reached" else None)
+    ghost = None          # otopilotun hayalet yolu tarayıcıda hesaplanır (drive_view: ghostRun, Python ile aynı adımlar)
     if rt["track_nogo"]:
-        st.warning("Rota ölü açıda: tekne bu doğru boyunca doğrudan gidemez (tramola yok).")
+        head.markdown(f'<div class="rt-head">{_DR_TITLE}' + _chip("⚠ Rota ölü açıda", "#EF4444",
+                      "Tekne bu doğru boyunca doğrudan gidemez (tramola yok).") + '</div>', unsafe_allow_html=True)
     env = sim_env(tws_kt, trim_auto, trim_manual, sail_type, p)
-    components.html(_drive_html(rt, env, ap, ghost, e0, tws_kt, sail_type, p), height=800, scrolling=True)
+    with st.container(key="drview"):
+        components.html(_drive_html(rt, env, ap, ghost, e0, tws_kt, sail_type, p), height=800, scrolling=True)
 
 
 # Model parametreleri: (alan, etiket, alt, üst, adım, biçim, yardım). Anahtarlı → "Varsayılanlara dön" çalışır.
@@ -1717,7 +1683,8 @@ def main():
             trim_manual = _slider_box("Yelken açısı δs (°)", -90, 90, 45, 1, "trim",
                                       help="+ bumba sancakta. Iskotalı bez yelkende yalnız |δs| sınırdır.")
 
-        with st.expander("⚙️ Model parametreleri (VARSAYIM)", expanded=False):
+        with st.expander("⚙️ Model parametreleri", expanded=False):
+            st.caption("Bu bölümdeki değerler **varsayımdır** (ölçülmemiş tahminler); kendi teknene göre değiştir.")
             auto_method = st.radio("Otomatik trim yöntemi", ["Optimum (maks. itiş)", "Jaulin Eq.(11) kardioid"],
                                    help="Optimum: kuvvet hesabından. Jaulin 2013 Eq.(11): kardioid kural.")
             boom_lbl = st.radio("Bez yelken bumba tahriki", ["Iskota (ip)", "Rijit servo"],
